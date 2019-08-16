@@ -1,0 +1,8 @@
+# This make file builds the AltaAPI Layer 1 source files into a 32-bit shared object file
+all :
+	gcc -Wall -m32 -DKERNEL_64BIT -fPIC -c *.c
+	gcc -shared -m32 -Wl,-soname,libADT_L1_Linux_x86_32.so -o libADT_L1_Linux_x86_32.so *.o
+
+clean :
+	rm -f *~ core *.o *.so
+
