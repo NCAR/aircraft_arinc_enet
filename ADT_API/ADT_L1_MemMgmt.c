@@ -426,6 +426,12 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_InitMemMgmt(ADT_L0_UINT32 devID, ADT_L0_UI
 				memSize = memTop - ADT_L1_1553_USER_MEM_START;  /* 1M bytes per channel minus channel register area */
 				break;
 
+			case ADT_DEVID_BOARDTYPE_ENETX_1553:		/* ENETX-1553 Board */
+				memStart = ADT_L1_1553_USER_MEM_START;
+				memTop = ADT_L1_ENETX_1553_CHAN_SIZE;
+				memSize = memTop - ADT_L1_1553_USER_MEM_START;  /* 1M bytes per channel minus channel register area */
+				break;
+
 			case ADT_DEVID_BOARDTYPE_PMCE1553:		/* PMCE-1553 Board */
 				memStart = ADT_L1_1553_USER_MEM_START;
 				memTop = ADT_L1_PMCE1553_CHAN_SIZE;

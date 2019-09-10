@@ -481,6 +481,11 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_DevicePresent(ADT_L0_UINT32 devID, ADT_L0_
                      result = ADT_ERR_ENET_BADPRODUCTID;
                   break;
 
+               case ADT_DEVID_BOARDTYPE_ENETX_1553:
+                  if ((prodIdRev >> 16) != ADT_L1_GLOBAL_PRODIDREV_ENETX_1553)
+                     result = ADT_ERR_ENET_BADPRODUCTID;
+                  break;
+
               default:
                   result = ADT_ERR_BAD_INPUT;
                   break;
@@ -888,6 +893,11 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_InitDevice(ADT_L0_UINT32 devID, ADT_L0_UIN
 
                case ADT_DEVID_BOARDTYPE_ENETX_MA4:
                   if ((prodIdRev >> 16) != ADT_L1_GLOBAL_PRODIDREV_ENETX_MA4)
+                     result = ADT_ERR_ENET_BADPRODUCTID;
+                  break;
+
+               case ADT_DEVID_BOARDTYPE_ENETX_1553:
+                  if ((prodIdRev >> 16) != ADT_L1_GLOBAL_PRODIDREV_ENETX_1553)
                      result = ADT_ERR_ENET_BADPRODUCTID;
                   break;
 
@@ -1305,6 +1315,7 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_ProgramBoardFlash(ADT_L0_UINT32 devID, ADT
 			|| (boardType == ADT_DEVID_BOARDTYPE_ENET_MA4)
 			|| (boardType == ADT_DEVID_BOARDTYPE_ENETX_MA4)
 			|| (boardType == ADT_DEVID_BOARDTYPE_ENETA429P)
+			|| (boardType == ADT_DEVID_BOARDTYPE_ENETX_1553)
 		) {
       result = Internal_ProgramEnetFlash(devID, numBytes, fpga_load_bytes);
       return (result);
@@ -1944,6 +1955,7 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV Internal_verify_flash(ADT_L0_UINT32 devID, ADT_L0
 			|| (boardType == ADT_DEVID_BOARDTYPE_ENET_MA4)
 			|| (boardType == ADT_DEVID_BOARDTYPE_ENETX_MA4)
 			|| (boardType == ADT_DEVID_BOARDTYPE_ENETA429P)
+			|| (boardType == ADT_DEVID_BOARDTYPE_ENETX_1553)
 		) {
       /* the size of the FPGA bit stream file for ECP3-70 is ~2.4Mbyte. */
       sync_pattern = 0xFFFFBDCD;
@@ -2372,6 +2384,7 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV Internal_GetChannelRegOffset(ADT_L0_UINT32 devID,
       case (ADT_DEVID_BOARDTYPE_ENET2_1553 | ADT_DEVID_CHANNELTYPE_GLOBALS):
       case (ADT_DEVID_BOARDTYPE_ENET_MA4 | ADT_DEVID_CHANNELTYPE_GLOBALS):
       case (ADT_DEVID_BOARDTYPE_ENETX_MA4 | ADT_DEVID_CHANNELTYPE_GLOBALS):
+	  case (ADT_DEVID_BOARDTYPE_ENETX_1553 | ADT_DEVID_CHANNELTYPE_GLOBALS):
          *pChannelRegOffset = 0;
          break;
 
@@ -2480,6 +2493,9 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV Internal_GetChannelRegOffset(ADT_L0_UINT32 devID,
          *pChannelRegOffset = ADT_L1_ENETX_MA4_CHAN_SIZE * (*pChannel + 1) + ADT_L1_1553_CHAN_REGS;
          break;
 
+      case (ADT_DEVID_BOARDTYPE_ENETX_1553 | ADT_DEVID_CHANNELTYPE_1553):
+         *pChannelRegOffset = ADT_L1_ENETX_1553_CHAN_SIZE * (*pChannel + 1) + ADT_L1_1553_CHAN_REGS;
+         break;
 
 
 	  /* A429 Channel Type */

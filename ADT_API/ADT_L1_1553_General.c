@@ -475,6 +475,39 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_1553_TimeSet(ADT_L0_UINT32 devID, ADT_L0_U
 	return( result );
 }
 
+/******************************************************************************
+  FUNCTION:		ADT_L1_1553_TimeRegisterSet - ADT_L1_1553_General.c
+ *****************************************************************************/
+/*! \brief Sets the time register value for the channel, but does not activate it. 
+ *
+ * This function sets the time registers without activating the new time.
+ *
+ * @param devID is the device identifier (Backplane, Board Type, Board #, Channel Type, Channel #).
+ * @param timeHigh is the upper 32-bits of the 64-bit time tag value.
+ * @param timeLow is the lower 32-bits of the 64-bit time tag value.
+ * @return 
+	- \ref ADT_SUCCESS - Completed without error
+	- \ref ADT_FAILURE - Completed with error
+*/
+ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_1553_TimeRegisterSet(ADT_L0_UINT32 devID, ADT_L0_UINT32 timeHigh, ADT_L0_UINT32 timeLow) {
+	ADT_L0_UINT32 result = ADT_SUCCESS;
+	ADT_L0_UINT32 channel, channelRegOffset;
+
+	/* Make sure this is a 1553 channel */
+	if ((devID & 0x0000FF00) != ADT_DEVID_CHANNELTYPE_1553)
+		return(ADT_ERR_UNSUPPORTED_CHANNELTYPE);
+
+	/* Get offset to the channel registers */
+	result = Internal_GetChannelRegOffset(devID, &channel, &channelRegOffset);
+	if (result != ADT_SUCCESS)
+		return(result);
+
+	/* Write the time value */
+	result = ADT_L0_WriteMem32(devID, channelRegOffset + ADT_L1_1553_PE_TIMEHIGH, &timeHigh, 1);
+	result = ADT_L0_WriteMem32(devID, channelRegOffset + ADT_L1_1553_PE_TIMELOW, &timeLow, 1);
+
+	return( result );
+}
 
 
 /******************************************************************************

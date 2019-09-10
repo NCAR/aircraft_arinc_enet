@@ -1317,7 +1317,832 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_1553_PB_IsRunning(ADT_L0_UINT32 devID, ADT
 }
 
 
+/******************************************************************************
+  FUNCTION:		ADT_L1_1553_PB_CDPWrite_Opt
+ *****************************************************************************/
+/*! \brief Converts a CDP to a PB packet and writes it to the PB buffer. 
+ *
+ * This function converts a CDP to a PB packet and writes it to the PB buffer in an 
+ * optimized fashion, it assumes this buffer is offline so does not check the 
+ * head or tail pointers.
+ *
+ * @param devID is the device identifier (Backplane, Board Type, Board #, Channel Type, Channel #).
+ * @param pCdp is a pointer to the CDP to write to the PB packet.
+ * @param options are the packet control word options.
+ *	- ADT_L1_1553_PBP_CONTROL_STOP		0x00000200
+ *	- ADT_L1_1553_PBP_CONTROL_LED		0x00000100
+ *	- ADT_L1_1553_PBP_CONTROL_TRGOUT	0x00000080
+ *	- ADT_L1_1553_PBP_CONTROL_INT		0x00000040
+ *  - ADT_L1_1553_API_PB_CDPWRITE_ATON	0x80000000
+ * @param pbCdpAddr the address of the PB CDP buffer to write this CDP message to.
+
+ * @return 
+	- \ref ADT_SUCCESS - Completed without error
+	- \ref ADT_ERR_PB_BUFFER_FULL - PB buffer is full
+	- \ref ADT_ERR_BAD_INPUT - Invalid CDP
+	- \ref ADT_FAILURE - Completed with error
+ *
+ *  !!Change Record!!
+ *  081121: RS:	Added Option Bit Selection for controlling Relative or Absolute Timing
+ *				Look for ATflag for changes.
+ *
+*/
+ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_1553_PB_CDPWriteOptX(ADT_L0_UINT32 devID, ADT_L1_1553_CDP *pCdp, ADT_L0_UINT32 options, ADT_L0_UINT32 pbCdpAddr) {
+
+	ADT_L0_UINT32 result = ADT_SUCCESS;
+	ADT_L0_UINT32 channel, channelRegOffset, data, ATflag = 0;
+	ADT_L0_UINT32 wdCnt, msgType, pbpCtl, i, rtResp = 0xFFFFFFFF, rtAddr, rtMask;
+	ADT_L0_UINT32 packet[ADT_L1_1553_PB_PKT_SIZE];
+
+	/* Make sure this is a 1553 channel */
+	if ((devID & 0x0000FF00) != ADT_DEVID_CHANNELTYPE_1553)
+		return(ADT_ERR_UNSUPPORTED_CHANNELTYPE);
+
+	/* Get offset to the channel registers */
+	result = Internal_GetChannelRegOffset(devID, &channel, &channelRegOffset);
+	if (result != ADT_SUCCESS)
+		return(result);
+	
+	if (result == ADT_SUCCESS) {
+		/* PBCB Chain is Open, so Write items from the input CDP to the tail PB packet */
+
+		memset(packet, 0, sizeof(packet));
+		packet[ADT_L1_1553_PBP_TIME_HIGH >> 2] = pCdp->TimeHigh;
+		packet[ADT_L1_1553_PBP_TIME_LOW >> 2] = pCdp->TimeLow;
+
+		msgType = pCdp->CDPStatusWord & 0xFC000000; /* Message type bits */
+		wdCnt = pCdp->CDPStatusWord & 0x0000003F;   /* Number of data words */
+
+		/* We need to limit the number of words to transmit so we don't trigger the 
+		 * Terminal Fail-Safe Timer, cannot transmit longer than 800us (40 words, including CMD/STS).
+		 * We will limit wdCnt to 37 data words.
+		 */
+		if (wdCnt > 37) wdCnt = 37;
+
+		/* v2.5.4.1, 12 NOV 11, Rich Wade
+		 * On good status words, limit response time to a max of 12us to avoid PB delay pushing a good
+		 * response over 14us, where it becomes a late response.
+		 */
+		if ((pCdp->STS1info != 0xFFFFFFFF) && ((pCdp->STS1info & 0x00FF0000) > 0x00640000))
+		{
+			pCdp->STS1info &= 0xFF00FFFF;
+			pCdp->STS1info |= 0x00640000;
+		}
+		if ((pCdp->STS2info != 0xFFFFFFFF) && ((pCdp->STS2info & 0x00FF0000) > 0x00640000))
+		{
+			pCdp->STS2info &= 0xFF00FFFF;
+			pCdp->STS2info |= 0x00640000;
+		}
+
+		switch (msgType) {
+			case 0x04000000:	/* Spurious Data */
+			case 0x84000000:	/* Broadcast Spurious Data */
+				pbpCtl = (options & 0x000003C0) | wdCnt;  /* Control word */
+
+				/* Data words */
+				for (i=0; i<wdCnt; i++) {
+					if (i<32) data = pCdp->DATAinfo[i] & 0x80FFFFFF;  /* 0xF0FFFFFF; */
+					/* We changed above mask because SPURIOUS DATA with TWO-BUS/SYNC error was causing
+					 * playback to lose its mind and send the firmware to la-la land.
+					 * (changed in v2.5.0.5)
+					 */
+
+					else data = 0x0000FFFF;
+					if ((((data & 0x00FF0000) == 0x00010000) && (!ATflag)) && (!ATflag)) data &= 0xFF00FFFF;  /* Clear extra tick in gap time */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + i] = data;
+				}
+				break;
+
+			case 0x08000000:	/* BCRT */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Data words */
+				for (i=0; i<wdCnt; i++) {
+					if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+					else data = 0x0000FFFF;
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+				}
+
+				/* Status word */
+				rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+				rtMask = 0x00000001 << rtAddr;
+				if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+					/* Include RT STATUS word */
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 2);
+					data = pCdp->STS1info & 0xF0FFFFFF;
+					data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+				}
+				else {
+					/* Do not include RT STATUS word */ 
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 1);
+				}
+
+				break;
+
+			case 0x10000000:	/* RTBC */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Status word */
+				rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+				rtMask = 0x00000001 << rtAddr;
+				if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+					/* Include RT STATUS word */
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 2);
+					data = pCdp->STS1info & 0xF0FFFFFF;
+					data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 1] = data;
+
+					/* DATA words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 2 + i] = data;
+					}
+				}
+				else {
+					/* Do not include RT STATUS word or DATA words (only CMD1) */ 
+					pbpCtl = (options & 0x000003C0) | 0x00000001;
+				}
+				
+				break;
+
+			case 0x20000000:	/* RTRT */
+				/* Command word 1 */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Command word 2 */
+				data = pCdp->CMD2info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				if (((data & 0x00FF0000) == 0x00010000) && (!ATflag)) data &= 0xFF00FFFF;  /* Clear extra tick in gap time */
+				packet[(ADT_L1_1553_PBP_DATASTART >> 2) + 1] = data;
+
+				/* Status word 1 */
+				rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+				rtMask = 0x00000001 << rtAddr;
+				if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+					/* Include RT STATUS word 1 */
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 3);
+					data = pCdp->STS1info & 0xF0FFFFFF;
+					data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 2] = data;
+
+					/* DATA words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 3 + i] = data;
+					}
+
+					/* Status word 2 */
+					rtAddr = (pCdp->CMD2info & 0x0000F800) >> 11;
+					rtMask = 0x00000001 << rtAddr;
+					if ((rtResp & rtMask) && (pCdp->STS2info != 0xFFFFFFFF)) {
+						/* Include RT STATUS word 2 */
+						pbpCtl = (options & 0x000003C0) | (wdCnt + 4);
+						data = pCdp->STS2info & 0xF0FFFFFF;
+						data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 3 + i] = data;
+					}
+
+				}
+				else {
+					/* Do not include RT STATUS words or DATA words (only CMD1 and CMD2) */ 
+					pbpCtl = (options & 0x000003C0) | 0x00000002;
+				}
+				
+				break;
+
+			case 0x40000000:	/* MODE */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* If TRANSMIT, we send STATUS (if enabled) and any data words (just like RTBC) */
+				if (pCdp->CMD1info & 0x00000400) {
+					/* Status word */
+					rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+					rtMask = 0x00000001 << rtAddr;
+					if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+						/* Include RT STATUS word */
+						pbpCtl = (options & 0x000003C0) | (wdCnt + 2);
+						data = pCdp->STS1info & 0xF0FFFFFF;
+						data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 1] = data;
+
+						/* DATA words */
+						for (i=0; i<wdCnt; i++) {
+							if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+							else data = 0x0000FFFF;
+							packet[ADT_L1_1553_PBP_DATASTART / 4 + 2 + i] = data;
+						}
+					}
+					else {
+						/* Do not include RT STATUS word or DATA words (only CMD1) */ 
+						pbpCtl = (options & 0x000003C0) | 0x00000001;
+					}
+				}
+				/* If RECEIVE, we send any data words then send STATUS (if enabled) (just like BCRT) */
+				else {
+					/* Data words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+					}
+
+					/* Status word */
+					rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+					rtMask = 0x00000001 << rtAddr;
+					if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+						/* Include RT STATUS word */
+						pbpCtl = (options & 0x000003C0) | (wdCnt + 2);
+						data = pCdp->STS1info & 0xF0FFFFFF;
+						data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+					}
+					else {
+						/* Do not include RT STATUS word */ 
+						pbpCtl = (options & 0x000003C0) | (wdCnt + 1);
+					}
+				}
+
+				break;
+
+			case 0x88000000:	/* BROADCAST BCRT */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Data words */
+				for (i=0; i<wdCnt; i++) {
+					if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+					else data = 0x0000FFFF;
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+				}
+
+				/* Do not include RT STATUS word */ 
+				pbpCtl = (options & 0x000003C0) | (wdCnt + 1);
+				
+				break;
+
+			case 0xA0000000:	/* BROADCAST RTRT */
+				/* Command word 1 */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Command word 2 */
+				data = pCdp->CMD2info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				if (((data & 0x00FF0000) == 0x00010000) && (!ATflag)) data &= 0xFF00FFFF;  /* Clear extra tick in gap time */
+				packet[ADT_L1_1553_PBP_DATASTART / 4 + 1] = data;
+
+				/* Status word 1 */
+				rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+				rtMask = 0x00000001 << rtAddr;
+				if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+					/* Include RT STATUS word 1 */
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 3);
+					data = pCdp->STS1info & 0xF0FFFFFF;
+					data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 2] = data;
+
+					/* DATA words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 3 + i] = data;
+					}
+				}
+				else {
+					/* Do not include RT STATUS words or DATA words (only CMD1 and CMD2) */ 
+					pbpCtl = (options & 0x000003C0) | 0x00000002;
+				}
+
+				break;
+
+			case 0xC0000000:	/* BROADCAST MODE */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART >> 2] = data;
+
+				/* If TRANSMIT, then NO STATUS OR DATA */
+				if (pCdp->CMD1info & 0x00000400) {
+					/* Do not include RT STATUS word or DATA words (only CMD1) */ 
+					pbpCtl = (options & 0x000003C0) | 0x00000001;
+				}
+				/* If RECEIVE, we send any data words (just like BCRT BROADCAST) */
+				else {
+					/* Data words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[(ADT_L1_1553_PBP_DATASTART >> 2) + 1 + i] = data;
+					}
+
+					/* Do not include RT STATUS word */ 
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 1);
+				}
+
+				break;
+
+			default:			/* Unexpected Value */
+				result = ADT_ERR_BAD_INPUT;
+				break;
+		}
+
+		if (result == ADT_SUCCESS)
+		{
+			/* Control Word */
+			packet[ADT_L1_1553_PBP_CONTROL >> 2] = pbpCtl;
+			result = ADT_L0_WriteMem32(devID, channelRegOffset + pbCdpAddr + ADT_L1_1553_PBP_CONTROL, &packet[ADT_L1_1553_PBP_CONTROL >> 2],  6 + wdCnt + 4);
+		}
+
+	}
+
+	return result;
+}
 
 #ifdef __cplusplus
 }
 #endif
+
+
+/******************************************************************************
+  FUNCTION:		ADT_L1_1553_PB_CDPWriteOpt
+ *****************************************************************************/
+/*! \brief Converts a CDP to a PB packet and writes it to the PB buffer. 
+ *
+ * This function converts a CDP to a PB packet and writes it to the PB buffer.  This is
+ * an optimized version which minimized device writes, it does not check for tail/head
+ * pointer collision when writing, it is up to the calling code to deal with that.
+ *
+ * @param devID is the device identifier (Backplane, Board Type, Board #, Channel Type, Channel #).
+ * @param pCdp is a pointer to the CDP to write to the PB packet.
+ * @param options are the packet control word options.
+ *	- ADT_L1_1553_PBP_CONTROL_STOP		0x00000200
+ *	- ADT_L1_1553_PBP_CONTROL_LED		0x00000100
+ *	- ADT_L1_1553_PBP_CONTROL_TRGOUT	0x00000080
+ *	- ADT_L1_1553_PBP_CONTROL_INT		0x00000040
+ *  - ADT_L1_1553_API_PB_CDPWRITE_ATON	0x80000000
+ * @param isFirstMsg is 1 for first message in playback or 0 for NOT first message.
+ * @param pbData is an array of 6 elements used to carry playback information that is usually
+ *        stored in card memory but to minimize unneccessary device access will be placed in this array.
+
+ * @return 
+	- \ref ADT_SUCCESS - Completed without error
+	- \ref ADT_ERR_PB_BUFFER_FULL - PB buffer is full
+	- \ref ADT_ERR_BAD_INPUT - Invalid CDP
+	- \ref ADT_FAILURE - Completed with error
+ *
+ *  !!Change Record!!
+ *  081121: RS:	Added Option Bit Selection for controlling Relative or Absolute Timing
+ *				Look for ATflag for changes.
+ *
+*/
+ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_1553_PB_CDPWriteOpt(ADT_L0_UINT32 devID, ADT_L1_1553_CDP *pCdp, ADT_L0_UINT32 options, ADT_L0_UINT32 isFirstMsg, ADT_L0_UINT32 *pbData) {
+
+	ADT_L0_UINT32 result = ADT_SUCCESS;
+	ADT_L0_UINT32 channel, channelRegOffset, data, ATflag;
+	ADT_L0_UINT32 tailPBptr, wdCnt, msgType, pbpCtl, i, rtResp = 0xFFFFFFFF, rtAddr, rtMask;
+	ADT_L0_UINT32 firstTimeHigh, firstTimeLow, timeHigh, timeLow;
+	ADT_L0_UINT32 packet[ADT_L1_1553_PB_PKT_SIZE];
+	ADT_L0_UINT32 allocBuffers;
+
+	memset(packet, 0, sizeof(packet));
+
+	/* Make sure this is a 1553 channel */
+	if ((devID & 0x0000FF00) != ADT_DEVID_CHANNELTYPE_1553)
+		return(ADT_ERR_UNSUPPORTED_CHANNELTYPE);
+
+	/* Get offset to the channel registers */
+	result = Internal_GetChannelRegOffset(devID, &channel, &channelRegOffset);
+	if (result != ADT_SUCCESS)
+		return(result);
+
+	/* Check if pbData is allocated */
+	if (pbData == NULL) {
+		return(ADT_ERR_BAD_INPUT);
+	}
+	
+	/* If this is the FIRST MESSAGE IN PLAYBACK, then it is OK to go past head pointer
+	 * (on first msg head, tail, and start ptr will be the same).
+	 * If AT is Off, we also want to STORE THE TIMESTAMP on the first message.  This allows us to convert
+	 * all timestamps to time relative to start of playback (by subtracting the timestamp
+	 * from the first message.
+	 *
+	 * If AT is on, then we do not adjust time and the playback clock will compare for absolute time values.
+	 * The user must have previous set the Playback Control Clock Value to the desired time and possibly
+	 * set the PB CSR Bit to Not Reset Clock to Zero.
+	 */
+	ATflag = options & ADT_L1_1553_API_PB_CDPWRITE_ATON;
+	if (isFirstMsg) {
+		allocBuffers = pbData[0];
+		result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_PB_APIRTRESPWD, &pbData[0], 1);
+		rtResp = pbData[0];
+		result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_PB_STARTPBPTR, &pbData[1], 1);
+		pbData[2] = pbData[1];
+
+		/* Reset tail and head pointers to equal start pointer - First msg must be at start pointer */
+		tailPBptr = pbData[1];
+		result = ADT_L0_WriteMem32(devID, channelRegOffset + ADT_L1_1553_PB_APITAILPTR, &tailPBptr, 1);
+		result = ADT_L0_WriteMem32(devID, channelRegOffset + ADT_L1_1553_PB_CURRPBPTR, &tailPBptr, 1);
+
+		if (!ATflag) {
+		/* Save first msg timestamp */
+			firstTimeHigh = pCdp->TimeHigh;
+			firstTimeLow = pCdp->TimeLow;
+			pbData[3] = pCdp->TimeHigh;
+			pbData[4] = pCdp->TimeLow;
+
+			/* On first msg, add one 20ns tick.  We do this so PB will wait for ext clock on synchronous PB */
+			pCdp->TimeLow++;
+			if (pCdp->TimeLow < firstTimeLow) pCdp->TimeHigh++;  /* Handle carry */
+		}
+
+		pbData[5] = allocBuffers*ADT_L1_1553_PB_PKT_SIZE + pbData[1]; /* Calculate and set the maximum buffer address */
+	}
+
+	/* Else (not the first message in playback) . . .
+	 * If the tail ptr equals the head ptr, then the buffer (PBCB Link List) is full - cannot write packet to buffer.
+	 * If the buffer is not full, we want to read the first message timestamp so we can adjust the
+	 * current message timestamp to be time from start of playback.
+	 */
+	else {
+			rtResp = pbData[0];
+			tailPBptr = pbData[2];
+
+			firstTimeHigh = pbData[3];
+			firstTimeLow = pbData[4];
+	}
+
+	if (result == ADT_SUCCESS) {
+		/* PBCB Chain is Open, so Write items from the input CDP to the tail PB packet */
+
+		if (!ATflag) {
+			/* TIMESTAMP - Need to subtract time of first message in playback to make this time relative to start of playback. */
+			/* Time High */
+			timeHigh = pCdp->TimeHigh - firstTimeHigh;
+			if (firstTimeLow > pCdp->TimeLow) timeHigh -= 1;  /* Borrow/Carry (or whatever we call this) */
+			/* Time Low */
+			timeLow = pCdp->TimeLow - firstTimeLow;
+		}
+		else /* Absolute Time - No Adjustment Needed */
+		{
+			timeHigh = pCdp->TimeHigh;
+			timeLow = pCdp->TimeLow;
+		}
+
+		memset(packet, 0, sizeof(packet));
+		packet[ADT_L1_1553_PBP_TIME_HIGH / 4] = timeHigh;
+		packet[ADT_L1_1553_PBP_TIME_LOW / 4] = timeLow;
+
+		msgType = pCdp->CDPStatusWord & 0xFC000000; /* Message type bits */
+		wdCnt = pCdp->CDPStatusWord & 0x0000003F;   /* Number of data words */
+
+		/* We need to limit the number of words to transmit so we don't trigger the 
+		 * Terminal Fail-Safe Timer, cannot transmit longer than 800us (40 words, including CMD/STS).
+		 * We will limit wdCnt to 37 data words.
+		 */
+		if (wdCnt > 37) wdCnt = 37;
+
+		/* v2.5.4.1, 12 NOV 11, Rich Wade
+		 * On good status words, limit response time to a max of 12us to avoid PB delay pushing a good
+		 * response over 14us, where it becomes a late response.
+		 */
+		if ((pCdp->STS1info != 0xFFFFFFFF) && ((pCdp->STS1info & 0x00FF0000) > 0x00640000))
+		{
+			pCdp->STS1info &= 0xFF00FFFF;
+			pCdp->STS1info |= 0x00640000;
+		}
+		if ((pCdp->STS2info != 0xFFFFFFFF) && ((pCdp->STS2info & 0x00FF0000) > 0x00640000))
+		{
+			pCdp->STS2info &= 0xFF00FFFF;
+			pCdp->STS2info |= 0x00640000;
+		}
+
+		switch (msgType) {
+			case 0x04000000:	/* Spurious Data */
+			case 0x84000000:	/* Broadcast Spurious Data */
+				pbpCtl = (options & 0x000003C0) | wdCnt;  /* Control word */
+				packet[ADT_L1_1553_PBP_CONTROL / 4] = pbpCtl;
+
+				/* Data words */
+				for (i=0; i<wdCnt; i++) {
+					if (i<32) data = pCdp->DATAinfo[i] & 0x80FFFFFF;  /* 0xF0FFFFFF; */
+					/* We changed above mask because SPURIOUS DATA with TWO-BUS/SYNC error was causing
+					 * playback to lose its mind and send the firmware to la-la land.
+					 * (changed in v2.5.0.5)
+					 */
+
+					else data = 0x0000FFFF;
+					if ((((data & 0x00FF0000) == 0x00010000) && (!ATflag)) && (!ATflag)) data &= 0xFF00FFFF;  /* Clear extra tick in gap time */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + i] = data;
+				}
+				result = ADT_L0_WriteMem32(devID, channelRegOffset + tailPBptr + ADT_L1_1553_PBP_CONTROL, &packet[ADT_L1_1553_PBP_CONTROL / 4],  6 + wdCnt + 4);
+				break;
+
+			case 0x08000000:	/* BCRT */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Data words */
+				for (i=0; i<wdCnt; i++) {
+					if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+					else data = 0x0000FFFF;
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+				}
+
+				/* Status word */
+				rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+				rtMask = 0x00000001 << rtAddr;
+				if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+					/* Include RT STATUS word */
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 2);
+					data = pCdp->STS1info & 0xF0FFFFFF;
+					data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+				}
+				else {
+					/* Do not include RT STATUS word */ 
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 1);
+				}
+				
+				/* Control Word */
+				packet[ADT_L1_1553_PBP_CONTROL / 4] = pbpCtl;
+
+				result = ADT_L0_WriteMem32(devID, channelRegOffset + tailPBptr + ADT_L1_1553_PBP_CONTROL, &packet[ADT_L1_1553_PBP_CONTROL / 4],  6 + wdCnt + 4);
+				break;
+
+			case 0x10000000:	/* RTBC */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Status word */
+				rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+				rtMask = 0x00000001 << rtAddr;
+				if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+					/* Include RT STATUS word */
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 2);
+					data = pCdp->STS1info & 0xF0FFFFFF;
+					data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 1] = data;
+
+					/* DATA words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 2 + i] = data;
+					}
+				}
+				else {
+					/* Do not include RT STATUS word or DATA words (only CMD1) */ 
+					pbpCtl = (options & 0x000003C0) | 0x00000001;
+				}
+				
+				/* Control Word */
+				packet[ADT_L1_1553_PBP_CONTROL / 4] = pbpCtl;
+
+				result = ADT_L0_WriteMem32(devID, channelRegOffset + tailPBptr + ADT_L1_1553_PBP_CONTROL, &packet[ADT_L1_1553_PBP_CONTROL / 4],  6 + wdCnt + 4);
+				break;
+
+			case 0x20000000:	/* RTRT */
+				/* Command word 1 */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Command word 2 */
+				data = pCdp->CMD2info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				if (((data & 0x00FF0000) == 0x00010000) && (!ATflag)) data &= 0xFF00FFFF;  /* Clear extra tick in gap time */
+				packet[ADT_L1_1553_PBP_DATASTART / 4 + 1] = data;
+
+				/* Status word 1 */
+				rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+				rtMask = 0x00000001 << rtAddr;
+				if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+					/* Include RT STATUS word 1 */
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 3);
+					data = pCdp->STS1info & 0xF0FFFFFF;
+					data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 2] = data;
+
+					/* DATA words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 3 + i] = data;
+					}
+
+					/* Status word 2 */
+					rtAddr = (pCdp->CMD2info & 0x0000F800) >> 11;
+					rtMask = 0x00000001 << rtAddr;
+					if ((rtResp & rtMask) && (pCdp->STS2info != 0xFFFFFFFF)) {
+						/* Include RT STATUS word 2 */
+						pbpCtl = (options & 0x000003C0) | (wdCnt + 4);
+						data = pCdp->STS2info & 0xF0FFFFFF;
+						data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 3 + i] = data;
+					}
+
+				}
+				else {
+					/* Do not include RT STATUS words or DATA words (only CMD1 and CMD2) */ 
+					pbpCtl = (options & 0x000003C0) | 0x00000002;
+				}
+				
+				/* Control Word */
+				packet[ADT_L1_1553_PBP_CONTROL / 4] = pbpCtl;
+
+				result = ADT_L0_WriteMem32(devID, channelRegOffset + tailPBptr + ADT_L1_1553_PBP_CONTROL, &packet[ADT_L1_1553_PBP_CONTROL / 4],  6 + wdCnt + 4);
+				break;
+
+			case 0x40000000:	/* MODE */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* If TRANSMIT, we send STATUS (if enabled) and any data words (just like RTBC) */
+				if (pCdp->CMD1info & 0x00000400) {
+					/* Status word */
+					rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+					rtMask = 0x00000001 << rtAddr;
+					if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+						/* Include RT STATUS word */
+						pbpCtl = (options & 0x000003C0) | (wdCnt + 2);
+						data = pCdp->STS1info & 0xF0FFFFFF;
+						data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 1] = data;
+
+						/* DATA words */
+						for (i=0; i<wdCnt; i++) {
+							if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+							else data = 0x0000FFFF;
+							packet[ADT_L1_1553_PBP_DATASTART / 4 + 2 + i] = data;
+						}
+					}
+					else {
+						/* Do not include RT STATUS word or DATA words (only CMD1) */ 
+						pbpCtl = (options & 0x000003C0) | 0x00000001;
+					}
+				}
+				/* If RECEIVE, we send any data words then send STATUS (if enabled) (just like BCRT) */
+				else {
+					/* Data words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+					}
+
+					/* Status word */
+					rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+					rtMask = 0x00000001 << rtAddr;
+					if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+						/* Include RT STATUS word */
+						pbpCtl = (options & 0x000003C0) | (wdCnt + 2);
+						data = pCdp->STS1info & 0xF0FFFFFF;
+						data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+					}
+					else {
+						/* Do not include RT STATUS word */ 
+						pbpCtl = (options & 0x000003C0) | (wdCnt + 1);
+					}
+				}
+
+				/* Control Word */
+				packet[ADT_L1_1553_PBP_CONTROL / 4] = pbpCtl;
+
+				result = ADT_L0_WriteMem32(devID, channelRegOffset + tailPBptr + ADT_L1_1553_PBP_CONTROL, &packet[ADT_L1_1553_PBP_CONTROL / 4],  6 + wdCnt + 4);
+				break;
+
+			case 0x88000000:	/* BROADCAST BCRT */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Data words */
+				for (i=0; i<wdCnt; i++) {
+					if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+					else data = 0x0000FFFF;
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+				}
+
+				/* Do not include RT STATUS word */ 
+				pbpCtl = (options & 0x000003C0) | (wdCnt + 1);
+				
+				/* Control Word */
+				packet[ADT_L1_1553_PBP_CONTROL / 4] = pbpCtl;
+
+				result = ADT_L0_WriteMem32(devID, channelRegOffset + tailPBptr + ADT_L1_1553_PBP_CONTROL, &packet[ADT_L1_1553_PBP_CONTROL / 4],  6 + wdCnt + 4);
+				break;
+
+			case 0xA0000000:	/* BROADCAST RTRT */
+				/* Command word 1 */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* Command word 2 */
+				data = pCdp->CMD2info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				if (((data & 0x00FF0000) == 0x00010000) && (!ATflag)) data &= 0xFF00FFFF;  /* Clear extra tick in gap time */
+				packet[ADT_L1_1553_PBP_DATASTART / 4 + 1] = data;
+
+				/* Status word 1 */
+				rtAddr = (pCdp->CMD1info & 0x0000F800) >> 11;
+				rtMask = 0x00000001 << rtAddr;
+				if ((rtResp & rtMask) && (pCdp->STS1info != 0xFFFFFFFF)) {
+					/* Include RT STATUS word 1 */
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 3);
+					data = pCdp->STS1info & 0xF0FFFFFF;
+					data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+					packet[ADT_L1_1553_PBP_DATASTART / 4 + 2] = data;
+
+					/* DATA words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 3 + i] = data;
+					}
+				}
+				else {
+					/* Do not include RT STATUS words or DATA words (only CMD1 and CMD2) */ 
+					pbpCtl = (options & 0x000003C0) | 0x00000002;
+				}
+				
+				/* Control Word */
+				packet[ADT_L1_1553_PBP_CONTROL / 4] = pbpCtl;
+
+				result = ADT_L0_WriteMem32(devID, channelRegOffset + tailPBptr + ADT_L1_1553_PBP_CONTROL, &packet[ADT_L1_1553_PBP_CONTROL / 4],  6 + wdCnt + 4);
+				break;
+
+			case 0xC0000000:	/* BROADCAST MODE */
+				/* Command word */
+				data = pCdp->CMD1info & 0xF0FFFFFF;		
+				data |= ADT_L1_1553_PBP_DATA_CMDSYNC;	/* Set Command Sync */
+				packet[ADT_L1_1553_PBP_DATASTART / 4] = data;
+
+				/* If TRANSMIT, then NO STATUS OR DATA */
+				if (pCdp->CMD1info & 0x00000400) {
+					/* Do not include RT STATUS word or DATA words (only CMD1) */ 
+					pbpCtl = (options & 0x000003C0) | 0x00000001;
+				}
+				/* If RECEIVE, we send any data words (just like BCRT BROADCAST) */
+				else {
+					/* Data words */
+					for (i=0; i<wdCnt; i++) {
+						if (i<32) data = pCdp->DATAinfo[i] & 0xF000FFFF;
+						else data = 0x0000FFFF;
+						packet[ADT_L1_1553_PBP_DATASTART / 4 + 1 + i] = data;
+					}
+
+					/* Do not include RT STATUS word */ 
+					pbpCtl = (options & 0x000003C0) | (wdCnt + 1);
+				}
+
+				/* Control Word */
+				packet[ADT_L1_1553_PBP_CONTROL / 4] = pbpCtl;
+
+				result = ADT_L0_WriteMem32(devID, channelRegOffset + tailPBptr + ADT_L1_1553_PBP_CONTROL, &packet[ADT_L1_1553_PBP_CONTROL / 4],  6 + wdCnt + 4);
+				break;
+
+			default:			/* Unexpected Value */
+				result = ADT_ERR_BAD_INPUT;
+				break;
+		}
+
+
+		if (result == ADT_SUCCESS)
+		{
+			/* Set the address for the next PBCDP */
+			pbData[2] += ADT_L1_1553_PB_PKT_SIZE;
+			if (pbData[2] >= pbData[5]) {
+				pbData[2] = pbData[1];
+			}
+		}
+
+	}
+
+	return( result );
+}

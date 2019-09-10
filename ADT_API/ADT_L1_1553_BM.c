@@ -581,7 +581,6 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_1553_BM_ReadNewMsgs(ADT_L0_UINT32 devID, A
 
 				/* Read first 17 words of CDP (start through STS2INFO), all but DATA */
 				result = ADT_L0_ReadMem32(devID, channelRegOffset + byteCDPLastOffset, 
-//ALG				result = ADT_L0_ReadMem32DMA(devID, channelRegOffset + byteCDPLastOffset, 
 					(ADT_L0_UINT32 *) &pMsgBuffer[count], 17);
 				if (result != ADT_SUCCESS) return(result);
 
@@ -591,7 +590,6 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_1553_BM_ReadNewMsgs(ADT_L0_UINT32 devID, A
 				if (wdcount > 0)
 				{
 					result = ADT_L0_ReadMem32(devID, channelRegOffset + byteCDPLastOffset + ADT_L1_1553_CDP_DATA1INFO, 
-//ALG					result = ADT_L0_ReadMem32DMA(devID, channelRegOffset + byteCDPLastOffset + ADT_L1_1553_CDP_DATA1INFO, 
 						(ADT_L0_UINT32 *) &pMsgBuffer[count].DATAinfo[0], wdcount);
 					if (result != ADT_SUCCESS) return(result);
 				}
@@ -635,127 +633,78 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_1553_BM_ReadNewMsgsDMA(ADT_L0_UINT32 devID
 										 ADT_L0_UINT32 *pNumMsgs, ADT_L1_1553_CDP *pMsgBuffer) {
 	ADT_L0_UINT32 result = ADT_SUCCESS;
 	ADT_L0_UINT32 channel, channelRegOffset;
-	ADT_L0_UINT32 count, byteCDPCurrOffset;
+	ADT_L0_UINT32 byteCDPCurrOffset, byteCDPLastOffset;
 	ADT_L0_UINT32 byteCDPStartOffset, byteCDPEndOffset;
-	ADT_L0_UINT32 byteCDPLastOffset, byteTempOffset;
-	ADT_L0_UINT32 noRollCnt, rollCnt, msgCnt;
-	ADT_L0_UINT32 maxCdpCountPerRead = 2;    /* max 2 CDPs per read transaction */
-	/* The DMA buffer in driver is 100 32-bit words, so max of 2 CDPs */
+	ADT_L0_UINT32 numMsgsToRead, readCount;
 
 	/* Make sure this is a 1553 channel */
 	if ((devID & 0x0000FF00) != ADT_DEVID_CHANNELTYPE_1553)
 		return(ADT_ERR_UNSUPPORTED_CHANNELTYPE);
 
-	/* Get offset to the channel registers */
-	result = Internal_GetChannelRegOffset(devID, &channel, &channelRegOffset);
-	if (result != ADT_SUCCESS)
-		return(result);
+	if (maxNumMsgs > 0) {
 
-	/* Ensure that the pointers passed in are not NULL */
-	if ((pNumMsgs != 0) && (pMsgBuffer != 0)) {
+		/* Get offset to the channel registers */
+		result = Internal_GetChannelRegOffset(devID, &channel, &channelRegOffset);
+		if (result != ADT_SUCCESS)
+			return(result);
 
-		/* Read the API LAST CDP register (next CDP to read) */
-		result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_BM_RESV_API, &byteCDPLastOffset, 1);
-		if (result != ADT_SUCCESS) return(result);
-		
-		/* Read the BM Current Offset (next CDP to be filled by PE) */
-		result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_BM_CURRENTCDP, &byteCDPCurrOffset, 1);
-		if (result != ADT_SUCCESS) return(result);
+		/* Ensure that the pointers passed in are not NULL */
+		if ((pNumMsgs != 0) && (pMsgBuffer != 0)) {
 
-		/* Read the BM Start CDP Offset (first CDP in the buffer) */
-		result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_BM_STARTCDP, &byteCDPStartOffset, 1);
-		if (result != ADT_SUCCESS) return(result);
+			/* Read the API LAST CDP register (next CDP to read) */
+			result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_BM_RESV_API, &byteCDPLastOffset, 1);
+			if (result != ADT_SUCCESS) return(result);
+			
+			/* Read the BM Current Offset (next CDP to be filled by PE) */
+			result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_BM_CURRENTCDP, &byteCDPCurrOffset, 1);
+			if (result != ADT_SUCCESS) return(result);
 
-		/* Read the BM End CDP Offset (last CDP in the buffer) */
-		result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_BM_RESV_API_END, &byteCDPEndOffset, 1);
-		if (result != ADT_SUCCESS) return(result);
+			/* Read the BM Start CDP Offset (first CDP in the buffer) */
+			result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_BM_STARTCDP, &byteCDPStartOffset, 1);
+			if (result != ADT_SUCCESS) return(result);
 
-			count = 0;
-			if (maxNumMsgs > 0)
-			{
-				/* Determine how many CDPs are new, and if there is a roll-over of the linked list */
-				if (byteCDPLastOffset <= byteCDPCurrOffset)  /* No Roll-Over */
-				{
-					noRollCnt = (byteCDPCurrOffset - byteCDPLastOffset) / ADT_L1_1553_CDP_BYTECNT;
-					rollCnt = 0;
-				}
-				else   /* Roll-Over has occurred */
-				{
-					noRollCnt = (byteCDPEndOffset - byteCDPLastOffset) / ADT_L1_1553_CDP_BYTECNT;
-					rollCnt = (byteCDPCurrOffset - byteCDPStartOffset) / ADT_L1_1553_CDP_BYTECNT;
-				}
+			/* Read the BM End CDP Offset (last CDP in the buffer) */
+			result = ADT_L0_ReadMem32(devID, channelRegOffset + ADT_L1_1553_BM_RESV_API_END, &byteCDPEndOffset, 1);
+			if (result != ADT_SUCCESS) return(result);
 
-				/* Now we have our key numbers of new CDPs to read.
-				 *   noRollCnt = number of new CDPs before buffer roll-over
-				 *   rollCnt = number of new CDPs after buffer roll-over
-				 *
-				 * ENET devices (using ADCP) can read up to 6 contiguous CDPs in one transaction.
-				 */
-
-				/* Read any messages before the roll-over */
-				byteTempOffset = byteCDPLastOffset;
-				while ((noRollCnt > 0) && (count < maxNumMsgs))
-				{
-					if (noRollCnt <= maxCdpCountPerRead) msgCnt = noRollCnt;
-					else msgCnt = maxCdpCountPerRead;
-
-					if ((count + msgCnt) > maxNumMsgs) msgCnt = maxNumMsgs - count;
-
-					result = ADT_L0_ReadMem32DMA(devID, channelRegOffset + byteTempOffset, (ADT_L0_UINT32 *) &pMsgBuffer[count], msgCnt * ADT_L1_1553_CDP_WRDCNT);
-					if (result != ADT_SUCCESS) return(result);
-
-					byteTempOffset += (msgCnt * ADT_L1_1553_CDP_BYTECNT);
-
-					/* Save last offset to the API LAST CDP register */
-					result = ADT_L0_WriteMem32(devID, channelRegOffset + ADT_L1_1553_BM_RESV_API, &byteTempOffset, 1);
-					if (result != ADT_SUCCESS) return(result);
-
-					noRollCnt -= msgCnt;
-					count += msgCnt;
-				}
-
-				/* If we have a rollover, read the END CDP */
-				if ((rollCnt > 0) && (count < maxNumMsgs)) 
-				{
-					byteTempOffset = byteCDPEndOffset;
-					msgCnt = 1;
-
-					result = ADT_L0_ReadMem32DMA(devID, channelRegOffset + byteTempOffset, (ADT_L0_UINT32 *) &pMsgBuffer[count], msgCnt * ADT_L1_1553_CDP_WRDCNT);
-					if (result != ADT_SUCCESS) return(result);
-
-					/* Save last offset to the API LAST CDP register */
-					result = ADT_L0_WriteMem32(devID, channelRegOffset + ADT_L1_1553_BM_RESV_API, &byteCDPStartOffset, 1);
-					if (result != ADT_SUCCESS) return(result);
-
-					count += msgCnt;
-				}
-
-				/* Read any messages after the roll-over */
-				byteTempOffset = byteCDPStartOffset;
-				while ((rollCnt > 0) && (count < maxNumMsgs))
-				{
-					if (rollCnt <= maxCdpCountPerRead) msgCnt = rollCnt;
-					else msgCnt = maxCdpCountPerRead;
-
-					if ((count + msgCnt) > maxNumMsgs) msgCnt = maxNumMsgs - count;
-
-					result = ADT_L0_ReadMem32DMA(devID, channelRegOffset + byteTempOffset, (ADT_L0_UINT32 *) &pMsgBuffer[count], msgCnt * ADT_L1_1553_CDP_WRDCNT);
-					if (result != ADT_SUCCESS) return(result);
-
-					byteTempOffset += (msgCnt * ADT_L1_1553_CDP_BYTECNT);
-
-					/* Save last offset to the API LAST CDP register */
-					result = ADT_L0_WriteMem32(devID, channelRegOffset + ADT_L1_1553_BM_RESV_API, &byteTempOffset, 1);
-					if (result != ADT_SUCCESS) return(result);
-
-					rollCnt -= msgCnt;
-					count += msgCnt;
-				}
-
+			/* Determine how many CDPs are new */
+			if (byteCDPCurrOffset < byteCDPLastOffset)  /* Roll-Over has occurred */
+			{                    /* End of List CDP Count                    Start of List CDP Count */
+				numMsgsToRead = ((byteCDPEndOffset - byteCDPLastOffset) + (byteCDPCurrOffset - byteCDPStartOffset)) / ADT_L1_1553_CDP_BYTECNT + 1;
 			}
-			if (result == ADT_SUCCESS) *pNumMsgs = count;
+			else  /* No Roll-Over */
+			{
+				numMsgsToRead = (byteCDPCurrOffset - byteCDPLastOffset) / ADT_L1_1553_CDP_BYTECNT;
+			}
+			if (numMsgsToRead > maxNumMsgs) numMsgsToRead = maxNumMsgs;
+
+			*pNumMsgs = 0;
+			while (*pNumMsgs < numMsgsToRead)
+			{
+				if ((byteCDPLastOffset == byteCDPEndOffset) ||  // There is only one CDP to read before wrapping
+					((byteCDPLastOffset < byteCDPCurrOffset) && (byteCDPCurrOffset - byteCDPLastOffset == ADT_L1_1553_CDP_BYTECNT))) // Thers is only one CDP left in buffer
+				{
+					readCount = 1;
+				}
+				else
+				{
+					/* The DMA buffer in driver is 100 32-bit words, so max to read at a time is 2 CDPs */
+					readCount = 2;
+				}
+
+				result = ADT_L0_ReadMem32DMA(devID, channelRegOffset + byteCDPLastOffset, (ADT_L0_UINT32 *) &pMsgBuffer[*pNumMsgs], readCount * ADT_L1_1553_CDP_WRDCNT);
+				if (result != ADT_SUCCESS) return(result);
+				
+				byteCDPLastOffset += readCount * ADT_L1_1553_CDP_BYTECNT;                         /* Update pointer to next CDP to read. */
+				if (byteCDPLastOffset > byteCDPEndOffset) byteCDPLastOffset = byteCDPStartOffset; /* Check for wrap of Buffer.           */
+				*pNumMsgs += readCount;                                                           /* Update number of CDPs read.         */
+
+				result = ADT_L0_WriteMem32(devID, channelRegOffset + ADT_L1_1553_BM_RESV_API, &byteCDPLastOffset, 1); /* Update to next location to read */
+				if (result != ADT_SUCCESS) return(result);
+			}
+		}
+		else result = ADT_ERR_BAD_INPUT;
 	}
-	else result = ADT_ERR_BAD_INPUT;
 
 	return( result );
 }

@@ -28,7 +28,6 @@
 #define I2C_CNTL_STOP		0x00400000
 #define I2C_CNTL_RD			0x00200000
 #define I2C_CNTL_WR			0x00100000
-
 #define I2C_CNTL_NACK		0x00080000
 
 #define I2C_CNTL_CMD_WR		0x00000000
@@ -81,6 +80,36 @@ ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_Global_TimeClear(ADT_L0_UINT32 devID) {
 	return( result );
 }
 
+/******************************************************************************
+  FUNCTION:		ADT_L1_Global_TimeSet  - ADT_L1_BoardGlobal.c
+ *****************************************************************************/
+/*! \brief Sets the time-tag registers for all channels on the board at once
+ *
+ * This function triggers the time-tag registers for all channels on the board
+ * to update simultaneously with the stored values.
+ *
+ * @param devID is the device identifier (Backplane, Board Type, Board #, Channel Type, Channel #).
+ * @return 
+	- \ref ADT_SUCCESS - Completed without error
+	- \ref ADT_ERR_UNSUPPORTED_CHANNELTYPE - Invalid channel type
+	- \ref ADT_FAILURE - Completed with error
+*/
+ADT_L0_UINT32 ADT_L0_CALL_CONV ADT_L1_Global_TimeSet(ADT_L0_UINT32 devID) {
+	ADT_L0_UINT32 result = ADT_SUCCESS;
+	ADT_L0_UINT32 temp = 0;
+
+	/* Only applies to GLOBAL devices */
+	if ((devID & 0x0000FF00) == ADT_DEVID_CHANNELTYPE_GLOBALS)
+	{
+		/* Write to Global CSR to clear all time tags (set bit 0) */
+		result = ADT_L1_ReadDeviceMem32(devID, ADT_L1_GLOBAL_CSR, &temp, 1);
+		temp |= ADT_L1_GLOBAL_CSR_SETTT;
+		result = ADT_L1_WriteDeviceMem32(devID, ADT_L1_GLOBAL_CSR, &temp, 1);
+	}
+	else result = ADT_ERR_UNSUPPORTED_CHANNELTYPE;
+
+	return( result );
+}
 
 /******************************************************************************
   FUNCTION:		ADT_L1_Global_ConfigExtClk
