@@ -3,15 +3,15 @@
  *
  * Copyright (c) 2016, Alta Data Technologies LLC (ADT), All Rights Reserved.
  * Use of this software is subject to the ADT Software License (latest
- * revision), US Government or local laws and the ADT Terms and Conditions 
+ * revision), US Government or local laws and the ADT Terms and Conditions
  * of Sale (latest revision).
  *
  * Description:
- *		This example demonstrates how to use AltaAPI to configure the 
- *      transmission bit rate and APMP enable for the individual channels 
+ *		This example demonstrates how to use AltaAPI to configure the
+ *      transmission bit rate and APMP enable for the individual channels
  *      in a bank of A429 channels.
  *
- *      Please see the AltaAPI User's Manual and the AltaCore-ARINC manual 
+ *      Please see the AltaAPI User's Manual and the AltaCore-ARINC manual
  *      sections on ARINC A429 APMP for detailed descriptions of RXPs and
  *      APMP.
  *
@@ -93,8 +93,8 @@ void main()
   else
     printf("\nRead CSR =0x%x\n",rootCsr);
 
-/*
-printf("Exiting after successful initialization\n"); exit(1);
+
+//printf("Exiting after successful initialization\n"); exit(1);
   printf("\nSleeping\n");
   while (1)
   {
@@ -102,7 +102,7 @@ printf("Exiting after successful initialization\n"); exit(1);
     printf("%d 0x%08x 0x%08x\n", status, timeHigh, timeLow);
     sleep(2);
   }
-*/
+
 
   status = A429_Close();
   if (status != ADT_SUCCESS)
@@ -134,10 +134,18 @@ ADT_L0_UINT32 A429_Setup()
   else printf("SUCCESS\n");
 
 
-  status = ADT_L1_InitDevice(DEVID_GLOBAL, 0);
-  if (status != ADT_SUCCESS)
-    printf("FAILURE ADT_L1_InitDevice - Error = %d\n", status);
-  else printf("SUCCESS\n");
+
+  /* Init the ENET Device */
+  status = ADT_L1_A429_InitDefault(DEVID, 10);
+  if (status != ADT_SUCCESS) {
+    printf("\nFAILED! ADT_L1_A429_InitDefault Net1 Error = %d", status);
+    sleep(3);
+    status = ADT_L1_A429_InitDefault_ExtendedOptions(DEVID, 10, ADT_L1_API_DEVICEINIT_FORCEINIT | ADT_L1_API_DEVICEINIT_NOMEMTEST);
+    if (status != ADT_SUCCESS) {
+      printf("\nFAILED! ADT_L1_A429_InitDefault_ExtendedOptions Net1 Error = %d", status);
+      return status;
+    }
+  }
 
   printf("\n\nCalibrating IRIG . . . ");
   fflush(stdout);
@@ -152,18 +160,6 @@ ADT_L0_UINT32 A429_Setup()
     printf("Success.  IRIG signal is LOCKED.");
 
 
-
-  /* Init the ENET Device */
-  status = ADT_L1_A429_InitDefault(DEVID, 10);
-  if (status != ADT_SUCCESS) {
-    printf("\nFAILED! ADT_L1_A429_InitDefault Net1 Error = %d", status);
-    sleep(3);
-    status = ADT_L1_A429_InitDefault_ExtendedOptions(DEVID, 10, ADT_L1_API_DEVICEINIT_FORCEINIT | ADT_L1_API_DEVICEINIT_NOMEMTEST);
-    if (status != ADT_SUCCESS) {
-      printf("\nFAILED! ADT_L1_A429_InitDefault_ExtendedOptions Net1 Error = %d", status);
-      return status;
-    }
-  }
 
   /* NOTE ON A429 DEVICE INITIALIZATION FUNCTIONS:
    *	The recommended initialization method is ADT_L1_A429_InitDefault.  This function initializes the A429 channel, 
@@ -269,50 +265,50 @@ ADT_L0_UINT32 A429_Close()
 
 	printf("Stopping RX Channel 2 . . . ");
 	status = ADT_L1_A429_RX_Channel_Stop(DEVID, 1);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Stop(1)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Stopping RX Channel 3 . . . ");
 	status = ADT_L1_A429_RX_Channel_Stop(DEVID, 2);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Stop(2)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Stopping RX Channel 4 . . . ");
 	status = ADT_L1_A429_RX_Channel_Stop(DEVID, 3);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Stop(3)\n", status);
 	else printf(" SUCCESS!\n");
 
 
 	printf("Closing RX Channel 1 . . . ");
 	status = ADT_L1_A429_RX_Channel_Close(DEVID, 0);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Close(0)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Closing RX Channel 2 . . . ");
 	status = ADT_L1_A429_RX_Channel_Close(DEVID, 1);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Close(1)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Closing RX Channel 3 . . . ");
 	status = ADT_L1_A429_RX_Channel_Close(DEVID, 2);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Close(2)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Closing RX Channel 4 . . . ");
 	status = ADT_L1_A429_RX_Channel_Close(DEVID, 3);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Close(3)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Freeing MCRX buffer . . . ");
 	status = ADT_L1_A429_RXMC_BufferFree(DEVID);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RXMC_BufferFree\n", status);
 	else printf(" SUCCESS!\n");
 
