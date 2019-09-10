@@ -3,15 +3,15 @@
  *
  * Copyright (c) 2016, Alta Data Technologies LLC (ADT), All Rights Reserved.
  * Use of this software is subject to the ADT Software License (latest
- * revision), US Government or local laws and the ADT Terms and Conditions 
+ * revision), US Government or local laws and the ADT Terms and Conditions
  * of Sale (latest revision).
  *
  * Description:
- *		This example demonstrates how to use AltaAPI to configure the 
- *      transmission bit rate and APMP enable for the individual channels 
+ *		This example demonstrates how to use AltaAPI to configure the
+ *      transmission bit rate and APMP enable for the individual channels
  *      in a bank of A429 channels.
  *
- *      Please see the AltaAPI User's Manual and the AltaCore-ARINC manual 
+ *      Please see the AltaAPI User's Manual and the AltaCore-ARINC manual
  *      sections on ARINC A429 APMP for detailed descriptions of RXPs and
  *      APMP.
  *
@@ -93,8 +93,7 @@ void main()
   else
     printf("\nRead CSR =0x%x\n",rootCsr);
 
-/*
-printf("Exiting after successful initialization\n"); exit(1);
+//printf("Exiting after successful initialization\n"); exit(1);
   printf("\nSleeping\n");
   while (1)
   {
@@ -102,7 +101,6 @@ printf("Exiting after successful initialization\n"); exit(1);
     printf("%d 0x%08x 0x%08x\n", status, timeHigh, timeLow);
     sleep(2);
   }
-*/
 
   status = A429_Close();
   if (status != ADT_SUCCESS)
@@ -116,10 +114,9 @@ printf("Exiting after successful initialization\n"); exit(1);
  */
 ADT_L0_UINT32 A429_Setup()
 {
-  ADT_L0_UINT32	status, l0Version, l1Version;
+  ADT_L0_UINT32	status, globalCSR, l0Version, l1Version;
   ADT_L0_UINT16	peVersion;
 
-  char		strIn[100];
   ADT_L0_UINT32	s1 = 192, s2 = 168, s3 = 84, s4 = 12;		/* Server (eNet device) IP Octets */
   ADT_L0_UINT32	c1 = 192, c2 = 168, c3 = 84, c4 = 2;		/* Client (Your computer) IP Octets */
 
@@ -138,6 +135,14 @@ ADT_L0_UINT32 A429_Setup()
   if (status != ADT_SUCCESS)
     printf("FAILURE ADT_L1_InitDevice - Error = %d\n", status);
   else printf("SUCCESS\n");
+
+
+  status = ADT_L1_ReadDeviceMem32(DEVID_GLOB, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
+  if (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK)
+    printf("IRIG signal is locked.\n");
+  else
+    printf("IRIG signal is NOT locked.\n");
+
 
   printf("\n\nCalibrating IRIG . . . ");
   fflush(stdout);
@@ -166,17 +171,18 @@ ADT_L0_UINT32 A429_Setup()
   }
 
   /* NOTE ON A429 DEVICE INITIALIZATION FUNCTIONS:
-   *	The recommended initialization method is ADT_L1_A429_InitDefault.  This function initializes the A429 channel, 
-   *	performs a memory test (can take a few seconds), allocates interrupt queue, and sets defaults for A429 protocol.
-   *
-   *  If the application is exited abnormally (and the ADT_L1_CloseDevice was not called), then the next time the
-   *  device is initialized you may see status/error 1017 (ADT_ERR_DEVICEINUSE).  This is used to prevent two applications
-   *  from initializing the same device.  On an abnormal exit the board can be left in a "IN USE" state.  This
-   *  state can be overridden using the ADT_L1_A429_InitDefault_ExtendedOptions function.  This function can be
-   *  used to force initialization when the device is in use with the option ADT_L1_API_DEVICEINIT_FORCEINIT.
-   *  This function can also be used to skip the initialization memory test with the option ADT_L1_API_DEVICEINIT_NOMEMTEST.
-   *  See the AltaAPI Users Manual for more details on this function.  Here is an example of the initialization call
-   *  using these options:
+   *	The recommended initialization method is ADT_L1_A429_InitDefault.  This function initializes
+   *    the A429 channel, performs a memory test (can take a few seconds), allocates interrupt queue,
+   *    and sets defaults for A429 protocol.  If the application is exited abnormally (and the
+   *    ADT_L1_CloseDevice was not called), then the next time the device is initialized you may see
+   *    status/error 1017 (ADT_ERR_DEVICEINUSE).  This is used to prevent two applications from
+   *    initializing the same device.  On an abnormal exit the board can be left in a "IN USE" state.
+   *    This state can be overridden using the ADT_L1_A429_InitDefault_ExtendedOptions function.
+   *    This function can be used to force initialization when the device is in use with the option
+   *    ADT_L1_API_DEVICEINIT_FORCEINIT.  This function can also be used to skip the initialization
+   *    memory test with the option ADT_L1_API_DEVICEINIT_NOMEMTEST.  See the AltaAPI Users Manual for
+   *    more details on this function.  Here is an example of the initialization call using these
+   *    options:
    */
 
   /* Optional Retrieval of Device PE and API Info - mainly for troubleshooting. */
@@ -269,50 +275,50 @@ ADT_L0_UINT32 A429_Close()
 
 	printf("Stopping RX Channel 2 . . . ");
 	status = ADT_L1_A429_RX_Channel_Stop(DEVID, 1);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Stop(1)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Stopping RX Channel 3 . . . ");
 	status = ADT_L1_A429_RX_Channel_Stop(DEVID, 2);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Stop(2)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Stopping RX Channel 4 . . . ");
 	status = ADT_L1_A429_RX_Channel_Stop(DEVID, 3);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Stop(3)\n", status);
 	else printf(" SUCCESS!\n");
 
 
 	printf("Closing RX Channel 1 . . . ");
 	status = ADT_L1_A429_RX_Channel_Close(DEVID, 0);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Close(0)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Closing RX Channel 2 . . . ");
 	status = ADT_L1_A429_RX_Channel_Close(DEVID, 1);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Close(1)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Closing RX Channel 3 . . . ");
 	status = ADT_L1_A429_RX_Channel_Close(DEVID, 2);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Close(2)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Closing RX Channel 4 . . . ");
 	status = ADT_L1_A429_RX_Channel_Close(DEVID, 3);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RX_Channel_Close(3)\n", status);
 	else printf(" SUCCESS!\n");
 
 	printf("Freeing MCRX buffer . . . ");
 	status = ADT_L1_A429_RXMC_BufferFree(DEVID);
-	if (status != ADT_SUCCESS) 
+	if (status != ADT_SUCCESS)
 		printf("\nFAILED!  %d on ADT_L1_A429_RXMC_BufferFree\n", status);
 	else printf(" SUCCESS!\n");
 
