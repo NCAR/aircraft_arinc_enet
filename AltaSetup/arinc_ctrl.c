@@ -137,7 +137,7 @@ ADT_L0_UINT32 A429_Setup()
   else printf("SUCCESS\n");
 
 
-  status = ADT_L1_ReadDeviceMem32(DEVID_GLOB, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
+  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
   if (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK)
     printf("IRIG signal is locked.\n");
   else
