@@ -99,7 +99,7 @@ void main()
   {
     status = ADT_L1_Global_ReadIrigTime(DEVID_GLOBAL, &timeHigh, &timeLow);
     printf("%d 0x%08x 0x%08x\n", status, timeHigh, timeLow);
-    sleep(2);
+    sleep(3);
   }
 
   status = A429_Close();
@@ -344,6 +344,23 @@ ADT_L0_UINT32 A429_Close()
   return(status);
 }
 
+
+Status()
+{
+  ADT_L0_UINT32 status, globalCSR, portnum, transactions, retries, failures;
+
+  // Check IRIG status.
+  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
+  printf("IRIG: Detect=%d, Latch=%d, Lock=%d\n", (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
+
+  /* For ENET devices - Get and display the ENET ADCP statistics */
+  if ((DEVID & 0xF0000000) == ADT_DEVID_BACKPLANETYPE_ENET) {
+    status = ADT_L1_ENET_ADCP_GetStatistics(DEVID, &portnum, &transactions, &retries, &failures);
+    if (status == ADT_SUCCESS) {
+      printf("UDP Port %d:  %d transactions, %d retries, %d failures\n", portnum, transactions, retries, failures);
+    }
+  }
+}
 
 void sighandler(int s)
 {
