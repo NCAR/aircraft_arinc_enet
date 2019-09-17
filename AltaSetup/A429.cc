@@ -22,7 +22,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
-#include <ADT_L1.h>
 
 
 
@@ -118,13 +117,14 @@ void A429::Setup()
   status = ADT_L1_ENET_SetIpAddr(DEVID, ipOctets_to_ADT_L0_UINT32(s1, s2, s3, s4),
 					ipOctets_to_ADT_L0_UINT32(c1, c2, c3, c4));
   if (status != ADT_SUCCESS)
-    printf("ADT_L1_ENET_SetIpAddr failed, status = %d\n", status);
+    fprintf(stderr, "ADT_L1_ENET_SetIpAddr failed, status = %d\n", status);
 
 
   status = ADT_L1_InitDevice(DEVID_GLOBAL, 0);
   if (status != ADT_SUCCESS)
   {
-    printf("FAILURE ADT_L1_InitDevice GLOBAL - Error = %d\n", status);
+    fprintf(stderr, "FAILURE ADT_L1_InitDevice GLOBAL - Error = %d\n", status);
+    DisplayInitFailure(status);
     return;
   }
 
@@ -132,11 +132,15 @@ void A429::Setup()
   /* Init the ENET Device */
   status = ADT_L1_A429_InitDefault(DEVID, 10);
   if (status != ADT_SUCCESS) {
-    printf("ADT_L1_A429_InitDefault Net1 failed, status = %d", status); fflush(stdout);
+    fprintf(stderr, "ADT_L1_A429_InitDefault Net1 failed, status = %d\n", status); fflush(stdout);
+    DisplayInitFailure(status);
     sleep(3);
+
+    // Try forcing an init...
     status = ADT_L1_A429_InitDefault_ExtendedOptions(DEVID, 10, ADT_L1_API_DEVICEINIT_FORCEINIT | ADT_L1_API_DEVICEINIT_NOMEMTEST);
     if (status != ADT_SUCCESS) {
-      printf("ADT_L1_A429_InitDefault_ExtendedOptions Net1 failed, status = %d", status); fflush(stdout);
+      fprintf(stderr, "ADT_L1_A429_InitDefault_ExtendedOptions Net1 failed, status = %d\n", status); fflush(stdout);
+      DisplayInitFailure(status);
       return;
     }
   }
@@ -223,19 +227,22 @@ printf("StartChannel %d %d\n", channel, speed);
 
 void A429::Status()
 {
-  ADT_L0_UINT32 status, globalCSR, portnum, transactions, retries, failures;
+  ADT_L0_UINT32 status, bitStatus, globalCSR;
+
+  bitStatus = 0;
+  status = ADT_L1_BIT_PeriodicBIT(DEVID, &bitStatus);
+  if (status != ADT_SUCCESS) {
+    fprintf(stderr, "PBIT FAILED!\n");
+    DisplayBitFailure(bitStatus);
+  }
+
+  if (bitStatus) printf("\nBIT Status = %08X\n", bitStatus);
+
 
   // Check IRIG status.
   status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
   printf("IRIG: Detect=%d, Latch=%d, Lock=%d\n", (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
 
-  /* For ENET devices - Get and display the ENET ADCP statistics */
-  if ((DEVID & 0xF0000000) == ADT_DEVID_BACKPLANETYPE_ENET) {
-    status = ADT_L1_ENET_ADCP_GetStatistics(DEVID, &portnum, &transactions, &retries, &failures);
-    if (status == ADT_SUCCESS) {
-      printf("UDP Port %d:  %d transactions, %d retries, %d failures\n", portnum, transactions, retries, failures);
-    }
-  }
 }
 
 
@@ -249,28 +256,74 @@ printf("Close()\n");
   if (_isOpen == false)
     return;
 
-  ADT_L0_UINT32 status;
+  ADT_L0_UINT32 status, portnum, transactions, retries, failures;
 
   /* Stop the Receive Channels before deallocating channel memory. */
   for (int i = 0; i < _channelList.size(); ++i)
   {
     status = ADT_L1_A429_RX_Channel_Stop(DEVID, _channelList[i]);
     if (status != ADT_SUCCESS)
-      printf("ADT_L1_A429_RX_Channel_Stop(%d) failed, status=%d\n", _channelList[i], status);
+      fprintf(stderr, "ADT_L1_A429_RX_Channel_Stop(%d) failed, status=%d\n", _channelList[i], status);
 
     status = ADT_L1_A429_RX_Channel_Close(DEVID, _channelList[i]);
     if (status != ADT_SUCCESS)
-      printf("ADT_L1_A429_RX_Channel_Close(%d) failed, status=%d\n", _channelList[i], status);
+      fprintf(stderr, "ADT_L1_A429_RX_Channel_Close(%d) failed, status=%d\n", _channelList[i], status);
+  }
+
+
+  /* For ENET devices - Get and display the ENET ADCP statistics */
+  if ((DEVID & 0xF0000000) == ADT_DEVID_BACKPLANETYPE_ENET) {
+    status = ADT_L1_ENET_ADCP_GetStatistics(DEVID, &portnum, &transactions, &retries, &failures);
+    if (status == ADT_SUCCESS) {
+      printf("UDP Port %d:  %d transactions, %d retries, %d failures\n", portnum, transactions, retries, failures);
+    }
   }
 
 
   status = ADT_L1_A429_RXMC_BufferFree(DEVID);
   if (status != ADT_SUCCESS)
-    printf("ADT_L1_A429_RXMC_BufferFree failed, status=%d\n", status);
+    fprintf(stderr, "ADT_L1_A429_RXMC_BufferFree failed, status=%d\n", status);
 
   status = ADT_L1_CloseDevice(DEVID);
   if (status != ADT_SUCCESS)
-    printf("ADT_L1_CloseDevice failed, status=%d\n", status);
+    fprintf(stderr, "ADT_L1_CloseDevice failed, status=%d\n", status);
 
   _isOpen = false;
 }
+
+void A429::DisplayInitFailure(ADT_L0_UINT32 status)
+{
+  switch (status)
+  {
+    case ADT_ERR_MEM_TEST_FAIL:
+      fprintf(stderr, "  Init failed memory test.\n");
+      break;
+
+    case ADT_ERR_BITFAIL:
+      fprintf(stderr, "  Init failed built in test (BIT).\n");
+      break;
+
+    case ADT_ERR_DEVICEINUSE:
+      fprintf(stderr, "  Init failed, device in use.\n");
+      break;
+
+    case ADT_ERR_BAD_INPUT:
+      fprintf(stderr, "  Init failed, invalid number of IQ entries.\n");
+      break;
+
+    case ADT_FAILURE:
+      fprintf(stderr, "  Init failed, general failure.\n");
+      break;
+
+    default:
+      break;
+  }
+}
+
+void A429::DisplayBitFailure(ADT_L0_UINT32 bitStatus)
+{
+  if (bitStatus & ADT_L1_A429_BIT_MEMTESTFAIL) fprintf(stderr, "BIT Memory Test Failed.\n");
+  if (bitStatus & ADT_L1_A429_BIT_PROCFAIL) fprintf(stderr, "BIT Processor Test Failed.\n");
+  if (bitStatus & ADT_L1_A429_BIT_TTAGFAIL) fprintf(stderr, "BIT Time-Tag Test Failed.\n");
+}
+

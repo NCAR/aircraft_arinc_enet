@@ -1,3 +1,4 @@
+#include <ADT_L1.h>
 
 #include <vector>
 
@@ -22,6 +23,10 @@ public:
   void Close();
 
 protected:
+
+  // print human readable errors...
+  void DisplayInitFailure(ADT_L0_UINT32);
+  void DisplayBitFailure(ADT_L0_UINT32);
 
   bool _isOpen;
   bool _irigFail;
