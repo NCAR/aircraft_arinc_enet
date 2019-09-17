@@ -18,6 +18,9 @@ RdUDP::RdUDP() : _numAPMPpackets(0), _modeError(0), _statusError(0), _magicCooki
   printf("conn = %d\n",
 	udp->bind(host, port, QUdpSocket::ReuseAddressHint | QUdpSocket::ShareAddress));
 
+  for (int i = 0; i < 8; ++i)
+    _prevRXPseqNum[i] = -1;
+
   connect(udp, SIGNAL(readyRead()), this, SLOT(newData()));
 
 }
@@ -29,7 +32,7 @@ RdUDP::~RdUDP()
   printf("  mode errors=%u, status errors=%u, alignment errors=%u, sequence errors=%u\n",
 	_modeError, _statusError, _magicCookieError, _APMPseqError);
 
-  for (uint32_t i = 0; i < 8; ++i)
+  for (int i = 0; i < 8; ++i)
   {
     if (_numRXP[i] > 0) {
       printf("\n\nTotal RXP packets for channel %u = %u\n", i, _numRXP[i]);
@@ -100,13 +103,16 @@ void RdUDP::newData()
   const rxp *pSamp = (const rxp *) (buffer + sizeof(APMP_hdr));
   for (int i = 0; i < nFields; i++)
   {
-    uint32_t channel = (pSamp[i].control & 0x0F000000) >> 24;
-    uint32_t seqNum = (pSamp[i].control & 0x00FF0000) >> 16;
+    int channel = (pSamp[i].control & 0x0F000000) >> 24;
+    int seqNum = (pSamp[i].control & 0x00FF0000) >> 16;
     _numRXP[channel]++;
 
     if (pSamp[i].control & 0x80000000) _rxpDecodeError[channel]++;
 
-    if (_prevRXPseqNum[channel] > 0 && seqNum != _prevRXPseqNum[channel] + 1) {
+    if (_prevRXPseqNum[channel] != -1 &&
+       (seqNum != 0 && _prevRXPseqNum[channel] != 255) && // rollover, counter is 8 bit
+        seqNum != _prevRXPseqNum[channel] + 1)
+    {
       _rxpSeqError[channel]++;
       fprintf(stderr, "RXP sequence anomaly : prevSeq=%d, thisSeq=%d\n",
 		_prevRXPseqNum[channel], seqNum);

@@ -27,8 +27,8 @@ private:
   char		buffer[65000];
   char		irigHHMMSS[32];
 
-  uint32_t	_numAPMPpackets, _modeError, _statusError, _magicCookieError;
+  int		_numAPMPpackets, _modeError, _statusError, _magicCookieError;
   uint32_t	_prevAPMPseqNum, _APMPseqError;
-  std::map<uint32_t, uint32_t>  _numRXP, _rxpDecodeError, _prevRXPseqNum, _rxpSeqError;
+  std::map<int, int>  _numRXP, _rxpDecodeError, _prevRXPseqNum, _rxpSeqError;
 };
 
