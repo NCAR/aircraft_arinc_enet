@@ -35,6 +35,8 @@
 
 A429::A429() : _irigFail(0)
 {
+  setEnetIP("192.168.84.12");
+  setACserverIP("192.168.84.2");
 
 }
 
@@ -108,14 +110,10 @@ void A429::Setup()
   ADT_L0_UINT32	status, l0Version, l1Version;
   ADT_L0_UINT16	peVersion;
 
-  char		strIn[100];
-  ADT_L0_UINT32	s1 = 192, s2 = 168, s3 = 84, s4 = 12;		/* Server (eNet device) IP Octets */
-  ADT_L0_UINT32	c1 = 192, c2 = 168, c3 = 84, c4 = 2;		/* Client (Your computer) IP Octets */
-
-
   /* Set IP addresses and Init Devices - Must be done in this sequential order! */
-  status = ADT_L1_ENET_SetIpAddr(DEVID, ipOctets_to_ADT_L0_UINT32(s1, s2, s3, s4),
-					ipOctets_to_ADT_L0_UINT32(c1, c2, c3, c4));
+  status = ADT_L1_ENET_SetIpAddr(DEVID,
+	ipOctets_to_ADT_L0_UINT32(enetIP[0], enetIP[1], enetIP[2], enetIP[3]),
+	ipOctets_to_ADT_L0_UINT32(acserverIP[0], acserverIP[1], acserverIP[2], acserverIP[3]));
   if (status != ADT_SUCCESS)
     fprintf(stderr, "ADT_L1_ENET_SetIpAddr failed, status = %d\n", status);
 
@@ -325,5 +323,17 @@ void A429::DisplayBitFailure(ADT_L0_UINT32 bitStatus)
   if (bitStatus & ADT_L1_A429_BIT_MEMTESTFAIL) fprintf(stderr, "BIT Memory Test Failed.\n");
   if (bitStatus & ADT_L1_A429_BIT_PROCFAIL) fprintf(stderr, "BIT Processor Test Failed.\n");
   if (bitStatus & ADT_L1_A429_BIT_TTAGFAIL) fprintf(stderr, "BIT Time-Tag Test Failed.\n");
+}
+
+void A429::setEnetIP(const char ip[])
+{
+  sscanf(ip, "%d.%d.%d.%d", &enetIP[0], &enetIP[1], &enetIP[2], &enetIP[3]);
+  printf("ARINC device IP set to %d.%d.%d.%d\n", enetIP[0], enetIP[1], enetIP[2], enetIP[3]);
+}
+
+void A429::setACserverIP(const char ip[])
+{
+  sscanf(ip, "%d.%d.%d.%d", &acserverIP[0], &acserverIP[1], &acserverIP[2], &acserverIP[3]);
+  printf("acserver IP set to %d.%d.%d.%d\n", acserverIP[0], acserverIP[1], acserverIP[2], acserverIP[3]);
 }
 

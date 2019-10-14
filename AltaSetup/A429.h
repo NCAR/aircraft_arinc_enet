@@ -22,6 +22,10 @@ public:
   void Status();
   void Close();
 
+  void setEnetIP(const char ip[]);
+  void setACserverIP(const char ip[]);
+
+
 protected:
 
   // print human readable errors...
@@ -30,6 +34,9 @@ protected:
 
   bool _isOpen;
   bool _irigFail;
+
+  ADT_L0_UINT32	enetIP[4];
+  ADT_L0_UINT32	acserverIP[4];
 
   std::vector<int> _channelList;
 };

@@ -8,6 +8,32 @@
 
 A429 enet1;
 
+
+void processArgs(int argc, char *argv[])
+{
+  int opt;
+
+  while((opt = getopt(argc, argv, ":i:s:")) != -1)
+  {
+    switch(opt)
+    {
+            case 's':
+                enet1.setACserverIP(optarg);
+                break;
+            case 'i':
+                enet1.setEnetIP(optarg);
+                break;
+            case ':':
+                printf("option needs a value\n");
+                break;
+            case '?':
+                printf("unknown option: %c\n", optopt);
+                break;
+    }
+  }
+}
+
+
 void sighandler(int s)
 {
   fprintf(stderr, "SigHandler: signal=%s cleaning up.\n", strsignal(s));
@@ -17,6 +43,7 @@ void sighandler(int s)
 
 int main(int argc, char *argv[])
 {
+  processArgs(argc, argv);
 
   signal(SIGINT, sighandler);
   signal(SIGFPE, sighandler);
