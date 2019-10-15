@@ -56,6 +56,9 @@ printf("Open()\n");
   Setup();
 printf("Setup done; isOpen=%d irigFail=%d\n", _isOpen, _irigFail);
 
+  if (!_isOpen)
+    return;
+
   if (_irigFail)
   {
     printf("Disabling APMP UDP broadcast.\n");

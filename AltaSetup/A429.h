@@ -22,6 +22,8 @@ public:
   void Status();
   void Close();
 
+  bool isOpen()		{ return _isOpen; }
+
   void setEnetIP(const char ip[]);
   void setACserverIP(const char ip[]);
 

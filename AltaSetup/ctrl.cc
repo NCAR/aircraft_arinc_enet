@@ -36,7 +36,7 @@ void processArgs(int argc, char *argv[])
 
 void sighandler(int s)
 {
-  fprintf(stderr, "SigHandler: signal=%s cleaning up.\n", strsignal(s));
+  fprintf(stderr, "arinc_ctrl::SigHandler: signal=%s cleaning up.\n", strsignal(s));
   enet1.Close();
   exit(0);
 }
@@ -52,6 +52,9 @@ int main(int argc, char *argv[])
 
 
   enet1.Open();
+  if (enet1.isOpen() == false)
+    exit(1);
+
   enet1.Status();
   enet1.CalibrateIRIG();
   enet1.Status();
@@ -59,8 +62,6 @@ int main(int argc, char *argv[])
   enet1.StartChannel(5, 100000);
   enet1.StartChannel(6, 12500);
   enet1.StartChannel(7, 100000);
-
-
 
 
   while (1)
