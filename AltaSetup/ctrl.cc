@@ -33,22 +33,40 @@ void processArgs(int argc, char *argv[])
   }
 }
 
-
-void sighandler(int s)
+void sigAction(int sig, siginfo_t* siginfo, void* vptr)
 {
-  fprintf(stderr, "arinc_ctrl::SigHandler: signal=%s cleaning up.\n", strsignal(s));
+  fprintf(stderr, "arinc_ctrl::SigHandler: signal=%s cleaning up.\n", strsignal(sig));
   enet1.Close();
   exit(0);
 }
 
+void setupSignals()
+{
+  // set up a sigaction to respond to ctrl-C
+  sigset_t sigset;
+  sigemptyset(&sigset);
+  sigaddset(&sigset, SIGHUP);
+  sigaddset(&sigset, SIGTERM);
+  sigaddset(&sigset, SIGINT);
+  sigprocmask(SIG_UNBLOCK, &sigset, (sigset_t*)0);
+
+
+  struct sigaction act;
+  sigemptyset(&sigset);
+  act.sa_mask = sigset;
+  act.sa_flags = SA_SIGINFO;
+  act.sa_sigaction = sigAction;
+  sigaction(SIGHUP, &act, (struct sigaction *)0);
+  sigaction(SIGINT, &act, (struct sigaction *)0);
+  sigaction(SIGTERM,&act, (struct sigaction *)0);
+
+}
+
+
 int main(int argc, char *argv[])
 {
   processArgs(argc, argv);
-
-  signal(SIGINT, sighandler);
-  signal(SIGFPE, sighandler);
-  signal(SIGTERM, sighandler);
-  signal(SIGSEGV, sighandler);
+  setupSignals();
 
 
   enet1.Open();
