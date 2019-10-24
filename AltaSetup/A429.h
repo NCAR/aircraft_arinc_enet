@@ -20,6 +20,7 @@ public:
   void CalibrateIRIG();
   void StartChannel(int channel, int speed);
   void Status();
+  void CheckIRIG();
   void Close();
 
   bool isOpen()		{ return _isOpen; }
@@ -36,6 +37,9 @@ protected:
 
   bool _isOpen;
   bool _irigFail;
+
+  // Ongoing status / detect stuff.
+  bool _irigDetect;
 
   ADT_L0_UINT32	enetIP[4];
   ADT_L0_UINT32	acserverIP[4];

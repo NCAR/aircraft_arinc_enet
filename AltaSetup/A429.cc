@@ -205,6 +205,17 @@ printf("CalibrateIRIG\n");
 }
 
 
+void A429::CheckIRIG()
+{
+  if (_irigDetect == false)
+    _irigFail = true;
+
+  if (_irigFail == false)
+    return;
+
+  CalibrateIRIG();
+}
+
 void A429::StartChannel(int channel, int speed)
 {
 printf("StartChannel %d %d\n", channel, speed);
@@ -243,7 +254,7 @@ void A429::Status()
   // Check IRIG status.
   status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
   printf("IRIG: Detect=%d, Latch=%d, Lock=%d\n", (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
-
+  _irigDetect = (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
 }
 
 
