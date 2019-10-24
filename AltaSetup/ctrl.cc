@@ -6,29 +6,72 @@
 
 #include "A429.h"
 
+class ChannelInfo
+{
+public:
+  ChannelInfo() : channel(0), speed(0) { }
+
+  unsigned int Channel()	{ return channel; }
+  unsigned int Speed()		{ return speed; }
+
+  bool SetChannel(const char info[])
+  {
+    if (info[0] < '0' || info[0] > '7')
+    {
+      fprintf(stderr, "Channel number out of range, %c\n", info[0]);
+      return false;
+    }
+    if (info[1] != ',')
+    {
+      fprintf(stderr, "Parse exception, expected ',' in %s\n", info);
+      return false;
+    }
+    if (info[2] < '0' || info[2] > '1')
+    {
+      fprintf(stderr, "Invalid speed of %c, 0=high, 1=low\n", info[2]);
+      return false;
+    }
+
+    channel = info[0] - '0';
+    if (info[2] == '0') speed = 100000;
+    if (info[2] == '1') speed = 12500;
+  }
+
+private:
+  unsigned int channel;
+  unsigned int speed;
+};
+
+
+
 A429 enet1;
+std::vector<ChannelInfo> channelInfo;
 
 
 void processArgs(int argc, char *argv[])
 {
   int opt;
 
-  while((opt = getopt(argc, argv, ":i:s:")) != -1)
+  while((opt = getopt(argc, argv, ":i:s:c:")) != -1)
   {
+    ChannelInfo ci;
     switch(opt)
     {
-            case 's':
-                enet1.setACserverIP(optarg);
-                break;
-            case 'i':
-                enet1.setEnetIP(optarg);
-                break;
-            case ':':
-                printf("option needs a value\n");
-                break;
-            case '?':
-                printf("unknown option: %c\n", optopt);
-                break;
+      case 'c':
+        enet1.setACserverIP(optarg);
+        break;
+      case 's':
+        if (ci.SetChannel(optarg)) channelInfo.push_back(ci);
+        break;
+      case 'i':
+        enet1.setEnetIP(optarg);
+        break;
+      case ':':
+        printf("option needs a value\n");
+        break;
+      case '?':
+        printf("unknown option: %c\n", optopt);
+        break;
     }
   }
 }
@@ -76,10 +119,9 @@ int main(int argc, char *argv[])
   enet1.Status();
   enet1.CalibrateIRIG();
   enet1.Status();
-  enet1.StartChannel(4, 100000);
-  enet1.StartChannel(5, 100000);
-  enet1.StartChannel(6, 12500);
-  enet1.StartChannel(7, 100000);
+
+  for (int i = 0; i < channelInfo.size(); ++i)
+    enet1.StartChannel(channelInfo[i].Channel(), channelInfo[i].Speed());
 
 
   while (1)
