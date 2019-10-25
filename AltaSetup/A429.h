@@ -1,5 +1,7 @@
 #include <ADT_L1.h>
 
+#include <cstdlib>
+#include <string>
 #include <vector>
 
 /**
@@ -19,14 +21,16 @@ public:
   void Setup();
   void CalibrateIRIG();
   void StartChannel(int channel, int speed);
-  void Status();
+  std::string Status();
   void CheckIRIG();
   void Close();
 
-  bool isOpen()		{ return _isOpen; }
+  bool	isOpen()	{ return _isOpen; }
+  int	Port()		{ return _port; }
 
   void setEnetIP(const char ip[]);
   void setACserverIP(const char ip[]);
+  void setPort(const char port[])	{ _port = atoi(port); }
 
 
 protected:
@@ -43,6 +47,7 @@ protected:
 
   ADT_L0_UINT32	enetIP[4];
   ADT_L0_UINT32	acserverIP[4];
+  unsigned int _port;
 
   std::vector<int> _channelList;
 };

@@ -20,7 +20,7 @@
 
 #include "A429.h"
 #include <cstdio>
-#include <cstdlib>
+#include <sstream>
 #include <unistd.h>
 
 
@@ -33,7 +33,7 @@
 #define ipOctets_to_ADT_L0_UINT32(class1, class2, subnet, hostNum) (ADT_L0_UINT32)((class1 << 24) | (class2 << 16) | (subnet << 8) | hostNum)
 
 
-A429::A429() : _irigFail(0)
+A429::A429() : _irigFail(0), _port(56769)
 {
   setEnetIP("192.168.84.12");
   setACserverIP("192.168.84.2");
@@ -198,7 +198,7 @@ printf("CalibrateIRIG\n");
   if (status != ADT_SUCCESS)
   {
     printf("ADT_L1_Global_CalibrateIrigDac failed, status = %d\n", status);
-    printf("IRIG signal failed to calibrate.");
+    printf("IRIG signal failed to calibrate.\n");
   }
   else
     _irigFail = false;	// success.
@@ -237,12 +237,15 @@ printf("StartChannel %d %d\n", channel, speed);
 }
 
 
-void A429::Status()
+std::string A429::Status()
 {
   ADT_L0_UINT32 status, bitStatus, globalCSR;
+  std::stringstream statusStr;
+  statusStr << "STATUS,";
 
   bitStatus = 0;
   status = ADT_L1_BIT_PeriodicBIT(DEVID, &bitStatus);
+  statusStr << bitStatus << ",";
   if (status != ADT_SUCCESS) {
     fprintf(stderr, "PBIT FAILED!\n");
     DisplayBitFailure(bitStatus);
@@ -253,8 +256,12 @@ void A429::Status()
 
   // Check IRIG status.
   status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
-  printf("IRIG: Detect=%d, Latch=%d, Lock=%d\n", (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
+  statusStr << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT) << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH) << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK);
   _irigDetect = (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
+
+  printf("IRIG: Detect=%d, Latch=%d, Lock=%d\n", (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
+
+  return statusStr.str();
 }
 
 

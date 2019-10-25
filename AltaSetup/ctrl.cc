@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <unistd.h>
 
+#include <QUdpSocket>
+
 #include "A429.h"
 #include "ChannelInfo.h"
 
@@ -17,7 +19,7 @@ void processArgs(int argc, char *argv[])
 {
   int opt;
 
-  while((opt = getopt(argc, argv, ":i:s:c:")) != -1)
+  while((opt = getopt(argc, argv, ":i:s:c:p:")) != -1)
   {
     ChannelInfo ci;
     switch(opt)
@@ -30,6 +32,9 @@ void processArgs(int argc, char *argv[])
         break;
       case 'i':
         enet1.setEnetIP(optarg);
+        break;
+      case 'p':
+        enet1.setPort(optarg);
         break;
       case ':':
         fprintf(stderr, "option needs a value\n");
@@ -82,6 +87,8 @@ int main(int argc, char *argv[])
   if (enet1.isOpen() == false)
     exit(1);
 
+  QUdpSocket *udp = new QUdpSocket();
+  QHostAddress acserver(QString("192.168.84.2"));
 
   enet1.Status();
   enet1.CalibrateIRIG();
@@ -91,10 +98,13 @@ int main(int argc, char *argv[])
     enet1.StartChannel(channelInfo[i].Channel(), channelInfo[i].Speed());
 
 
+  int rc;
   while (1)
   {
-    enet1.Status();
+    std::string status = enet1.Status();
+    if ((rc = udp->writeDatagram(status.c_str(), status.length(), acserver, enet1.Port())) < 1)
+      fprintf(stderr, "udp->writeDatagram of status packet failed, nBytes=%d\n", rc);
     enet1.CheckIRIG();
-    sleep(3);
+    sleep(1);
   }
 }
