@@ -17,11 +17,11 @@ protected slots:
   void	newData();
 
 private:
-  uint32_t		decodeLABEL(uint32_t);
-  unsigned long		decodeIRIG(unsigned char *);
-  unsigned long long	decodeTIMER(const rxp&);
-  int			bcd_to_decimal(unsigned char x)	{ return x - 6 * (x >> 4); }
-  void			swapPacket(uint32_t *, size_t);
+  uint32_t	decodeLABEL(uint32_t);
+  unsigned long	decodeIRIG(unsigned char *);
+  long long	decodeTIMER(const rxp&);
+  int		bcd_to_decimal(unsigned char x)	{ return x - 6 * (x >> 4); }
+  void		swapPacket(uint32_t *, size_t);
 
   QUdpSocket	*udp;
   char		buffer[65000];

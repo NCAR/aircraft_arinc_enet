@@ -56,6 +56,12 @@ void RdUDP::newData()
   struct tm *gm = gmtime(&tv.tv_sec);
   printf("\n%02d:%02d:%02d.%ld  UDP read of nBytes=%d\n", gm->tm_hour, gm->tm_min, gm->tm_sec, tv.tv_usec /1000, nBytes);
 
+  if (strncmp(buffer, "STATUS", 6) == 0) {
+    printf("%s\n", buffer);
+    return;
+  }
+
+
   // Check packet health.
   ++_numAPMPpackets;
   if (hSamp->mode != 1) {
@@ -87,8 +93,8 @@ void RdUDP::newData()
   int nFields = (hSamp->payloadSize - 16) / sizeof(rxp);
   swapPacket((uint32_t *)&buffer[sizeof(APMP_hdr)], nFields * 4);
 
-  static unsigned long long prevPE = 0;
-  unsigned long long PE = hSamp->PEtimeHigh; PE = ((PE << 32) | hSamp->PEtimeLow) / 50;
+  static long long prevPE = 0;
+  long long PE = hSamp->PEtimeHigh; PE = ((PE << 32) | hSamp->PEtimeLow) / 50;
 
   decodeIRIG((unsigned char *)&hSamp->IRIGtimeLow);
 
@@ -119,12 +125,13 @@ void RdUDP::newData()
     }
     _prevRXPseqNum[channel] = seqNum;
 
-    unsigned long long ttime = decodeTIMER(pSamp[i]);
-    if (channel < 8)
-      printf("  %s.%-6llu  %d  %04o  %d  error=%d\n",
+    long long ttime = decodeTIMER(pSamp[i]);
+    if (channel < 8) {
+      printf("  %s.%-6lld  %d  %04o  %d  error=%d\n",
 		irigHHMMSS, (ttime-PE)/1000, channel,
 		decodeLABEL(pSamp[i].data), ((pSamp[i].data & 0xFFFFFF00) >> 8),
 		(pSamp[i].control & 0x80000000));
+    }
     else
       printf( "received channel number %d, outside 0-7, ignoring.\n", channel);
   }
@@ -165,10 +172,10 @@ unsigned long RdUDP::decodeIRIG(unsigned char *irig_bcd)
 }
 
 /* -------------------------------------------------------------------- */
-unsigned long long RdUDP::decodeTIMER(const rxp& samp)
+long long RdUDP::decodeTIMER(const rxp& samp)
 {
-    unsigned long long ttime;
-    static unsigned long long prevTime;
+    long long ttime;
+    static long long prevTime;
 
     /* Make 64-bit 20nsec/50Mhz Clock Ticks to 64-bit uSecs */
     ttime = samp.timeHigh;
