@@ -234,6 +234,8 @@ printf("StartChannel %d %d\n", channel, speed);
   status = ADT_L1_A429_RX_Channel_Start(DEVID, channel);
   if (status != ADT_SUCCESS)
     printf("ADT_L1_A429_RX_Channel_Start(%d) failed, status=%d\n", channel, status);
+  else
+    _channelList.push_back(channel);
 }
 
 
