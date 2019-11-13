@@ -33,7 +33,7 @@
 #define ipOctets_to_ADT_L0_UINT32(class1, class2, subnet, hostNum) (ADT_L0_UINT32)((class1 << 24) | (class2 << 16) | (subnet << 8) | hostNum)
 
 
-A429::A429() : _irigFail(0), _port(56769)
+A429::A429() : _irigFail(0), _failCounter(0), _port(56769)
 {
   setEnetIP("192.168.84.12");
   setACserverIP("192.168.84.2");
@@ -251,14 +251,18 @@ std::string A429::Status()
   if (status != ADT_SUCCESS) {
     fprintf(stderr, "PBIT FAILED!\n");
     DisplayBitFailure(bitStatus);
+    _failCounter++;
   }
+  else
+    _failCounter = 0;
 
   if (bitStatus) printf("\nBIT Status = %08X\n", bitStatus);
+  statusStr << status << "," << bitStatus << ",";
 
 
   // Check IRIG status.
   status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
-  statusStr << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT) << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH) << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK);
+  statusStr << status << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT) << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH) << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK);
   _irigDetect = (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
 
   printf("IRIG: Detect=%d, Latch=%d, Lock=%d\n", (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));

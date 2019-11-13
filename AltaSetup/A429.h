@@ -27,6 +27,7 @@ public:
 
   bool	isOpen()	{ return _isOpen; }
   int	Port()		{ return _port; }
+  int	failCounter()	{ return _failCounter; }
 
   void setEnetIP(const char ip[]);
   void setACserverIP(const char ip[]);
@@ -44,6 +45,8 @@ protected:
 
   // Ongoing status / detect stuff.
   bool _irigDetect;
+
+  int  _failCounter;
 
   ADT_L0_UINT32	enetIP[4];
   ADT_L0_UINT32	acserverIP[4];

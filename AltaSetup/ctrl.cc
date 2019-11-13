@@ -77,18 +77,11 @@ void setupSignals()
 
 }
 
-
-int main(int argc, char *argv[])
+void initializeSequence()
 {
-  processArgs(argc, argv);
-  setupSignals();
-
   enet1.Open();
   if (enet1.isOpen() == false)
     exit(1);
-
-  QUdpSocket *udp = new QUdpSocket();
-  QHostAddress acserver(QString("192.168.84.2"));
 
   enet1.Status();
   enet1.CalibrateIRIG();
@@ -96,7 +89,17 @@ int main(int argc, char *argv[])
 
   for (int i = 0; i < channelInfo.size(); ++i)
     enet1.StartChannel(channelInfo[i].Channel(), channelInfo[i].Speed());
+}
 
+int main(int argc, char *argv[])
+{
+  processArgs(argc, argv);
+  setupSignals();
+
+  initializeSequence();
+
+  QUdpSocket *udp = new QUdpSocket();
+  QHostAddress acserver(QString("192.168.84.2"));
 
   int rc;
   while (1)
@@ -104,6 +107,10 @@ int main(int argc, char *argv[])
     std::string status = enet1.Status();
     if ((rc = udp->writeDatagram(status.c_str(), status.length(), acserver, enet1.Port())) < 1)
       fprintf(stderr, "udp->writeDatagram of status packet failed, nBytes=%d\n", rc);
+
+    if (enet1.failCounter() > 5)
+      initializeSequence();
+
     enet1.CheckIRIG();
     sleep(1);
   }
