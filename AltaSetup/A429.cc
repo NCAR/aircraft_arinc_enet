@@ -110,8 +110,7 @@ printf("Setup done; isOpen=%d irigFail=%d\n", _isOpen, _irigFail);
  */
 void A429::Setup()
 {
-  ADT_L0_UINT32	status, l0Version, l1Version;
-  ADT_L0_UINT16	peVersion;
+  ADT_L0_UINT32	status;
 
   /* Set IP addresses and Init Devices - Must be done in this sequential order! */
   status = ADT_L1_ENET_SetIpAddr(DEVID,
@@ -241,7 +240,8 @@ printf("StartChannel %d %d\n", channel, speed);
 
 std::string A429::Status()
 {
-  ADT_L0_UINT32 status, bitStatus, globalCSR;
+  ADT_L0_UINT32 status, bitStatus = 0xffffffff, globalCSR;
+  ADT_L0_UINT32 portnum, transactions = 0xffffffff, retries = 0xffffffff, failures = 0xffffffff;
   std::stringstream statusStr;
   statusStr << "STATUS,";
 
@@ -257,7 +257,7 @@ std::string A429::Status()
     _failCounter = 0;
 
   if (bitStatus) printf("\nBIT Status = %08X\n", bitStatus);
-  statusStr << status << "," << bitStatus << ",";
+  statusStr << bitStatus << ",";
 
 
   // Check IRIG status.
@@ -266,6 +266,14 @@ std::string A429::Status()
   _irigDetect = (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
 
   printf("IRIG: Detect=%d, Latch=%d, Lock=%d\n", (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
+
+
+  status = ADT_L1_ENET_ADCP_GetStatistics(DEVID, &portnum, &transactions, &retries, &failures);
+  if (status == ADT_SUCCESS) {
+    printf("UDP Port %d:  %d transactions, %d retries, %d failures\n", portnum, transactions, retries, failures);
+  }
+
+  statusStr << "," << transactions << "," << retries << "," << failures;
 
   return statusStr.str();
 }
@@ -284,7 +292,7 @@ printf("Close()\n");
   ADT_L0_UINT32 status, portnum, transactions, retries, failures;
 
   /* Stop the Receive Channels before deallocating channel memory. */
-  for (int i = 0; i < _channelList.size(); ++i)
+  for (size_t i = 0; i < _channelList.size(); ++i)
   {
     status = ADT_L1_A429_RX_Channel_Stop(DEVID, _channelList[i]);
     if (status != ADT_SUCCESS)
