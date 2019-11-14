@@ -87,7 +87,7 @@ void initializeSequence()
   enet1.CalibrateIRIG();
   enet1.Status();
 
-  for (int i = 0; i < channelInfo.size(); ++i)
+  for (size_t i = 0; i < channelInfo.size(); ++i)
     enet1.StartChannel(channelInfo[i].Channel(), channelInfo[i].Speed());
 }
 

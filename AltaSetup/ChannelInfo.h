@@ -29,6 +29,8 @@ public:
     channel = info[0] - '0';
     if (info[2] == '0') speed = 100000;
     if (info[2] == '1') speed = 12500;
+
+    return true;
   }
 
 private:
