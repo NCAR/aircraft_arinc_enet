@@ -4,6 +4,10 @@
 
 QT += network
 TEMPLATE = app
+CONFIG += console
+
+#DESTDIR = /opt/nidas/bin
+
 INCLUDEPATH += .
 INCLUDEPATH += /opt/local/include/Alta
 LIBS += -L/opt/local/lib -lADT_L1_Linux_x86_64_v3310 -lADT_L0_Linux_x86_64_v3310
@@ -11,3 +15,7 @@ LIBS += -L/opt/local/lib -lADT_L1_Linux_x86_64_v3310 -lADT_L0_Linux_x86_64_v3310
 # Input
 HEADERS += A429.h
 SOURCES += ctrl.cc A429.cc
+
+target.files = arinc_ctrl
+target.path = /opt/nidas/bin
+INSTALLS += target
