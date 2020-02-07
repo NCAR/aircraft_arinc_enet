@@ -5,5 +5,7 @@ ADT_API/ - Contains the level 0 and level 1 library source from Alta.  And an RP
 
 AltaSetup/ - Program to setup the Alta ENET device how we want it.  Main program here, forked by nidas dsm process, or run standalone.
 
+doc/ - Manuals from Alta.
+
 rdAltaUDP/ - Command line utility to read and print legible UDP output from the Alta ENET.
 

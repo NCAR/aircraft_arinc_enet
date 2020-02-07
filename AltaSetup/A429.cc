@@ -190,7 +190,7 @@ void A429::Setup()
 void A429::CalibrateIRIG()
 {
 printf("CalibrateIRIG\n");
-  ADT_L0_UINT32 status, globalCSR;
+  ADT_L0_UINT32 status;
   _irigFail = true;
 
   status = ADT_L1_Global_CalibrateIrigDac(DEVID_GLOBAL);
@@ -240,40 +240,65 @@ printf("StartChannel %d %d\n", channel, speed);
 
 std::string A429::Status()
 {
-  ADT_L0_UINT32 status, bitStatus = 0xffffffff, globalCSR;
+  ADT_L0_UINT32 status, bitStatus = 0xffffffff, globalCSR = 0xffffffff;
   ADT_L0_UINT32 portnum, transactions = 0xffffffff, retries = 0xffffffff, failures = 0xffffffff;
   std::stringstream statusStr;
   statusStr << "STATUS,";
 
   bitStatus = 0;
   status = ADT_L1_BIT_PeriodicBIT(DEVID, &bitStatus);
-  statusStr << bitStatus << ",";
+  statusStr << status << "," << bitStatus << ",";
   if (status != ADT_SUCCESS) {
     fprintf(stderr, "PBIT FAILED!\n");
     DisplayBitFailure(bitStatus);
     _failCounter++;
   }
   else
+  {
     _failCounter = 0;
-
-  if (bitStatus) printf("\nBIT Status = %08X\n", bitStatus);
-  statusStr << bitStatus << ",";
+    if (bitStatus) printf("\nBIT Status = %08X\n", bitStatus);
+  }
 
 
   // Check IRIG status.
   status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
-  statusStr << status << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT) << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH) << "," << (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK);
-  _irigDetect = (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
+  statusStr << globalCSR << ",";
+  if (status == ADT_SUCCESS) {
+    statusStr	<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT) << ","
+		<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH) << ","
+		<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK);
+    _irigDetect = (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
+  }
+  else
+    statusStr << "-1,-1,-1";
 
   printf("IRIG: Detect=%d, Latch=%d, Lock=%d\n", (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
 
 
+  // These stats will be for the TCP conenction between this program and the device.
   status = ADT_L1_ENET_ADCP_GetStatistics(DEVID, &portnum, &transactions, &retries, &failures);
   if (status == ADT_SUCCESS) {
     printf("UDP Port %d:  %d transactions, %d retries, %d failures\n", portnum, transactions, retries, failures);
   }
 
-  statusStr << "," << transactions << "," << retries << "," << failures;
+  statusStr << "," << transactions << "," << retries << "," << failures << ",";
+
+
+  //
+  // PE Control Register (ADT_L1_A429_PE_ROOT_CSR, 0x0000): General ARINC configs (APMP, reset, trig, extclk, interrupts)
+  // PE Status Register (ADT_L1_A429_PE_ROOT_STS, 0x0004): ARINC status (IRIG det, IRIG lock, interrupt pending)
+  //
+  // PE BIT Status (ADT_L1_A429_PE_BITSTATUS, 0x002C): BIT tests
+  bitStatus = 0xffffffff;
+  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_A429_PE_ROOT_CSR, &bitStatus, 1);
+  statusStr << bitStatus << ",";
+  bitStatus = 0xffffffff;
+  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_A429_PE_ROOT_STS, &bitStatus, 1);
+  statusStr << bitStatus << ",";
+  bitStatus = 0xffffffff;
+  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_A429_PE_BITSTATUS, &bitStatus, 1);
+  statusStr << bitStatus;
+
 
   return statusStr.str();
 }
