@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
   while (1)
   {
     std::string status = enet1.Status();
-    if ((rc = udp->writeDatagram(status.c_str(), status.length(), acserver, enet1.Port())) < 1)
+    if ((rc = udp->writeDatagram(status.c_str(), status.length(), acserver, enet1.StatusPort())) < 1)
       fprintf(stderr, "udp->writeDatagram of status packet failed, nBytes=%d\n", rc);
 
     if (enet1.failCounter() > 5)

@@ -27,6 +27,7 @@ public:
 
   bool	isOpen()	{ return _isOpen; }
   int	Port()		{ return _port; }
+  int	StatusPort()	{ return _port+1; }
   int	failCounter()	{ return _failCounter; }
 
   void setEnetIP(const char ip[]);
