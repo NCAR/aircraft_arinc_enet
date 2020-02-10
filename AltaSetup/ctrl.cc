@@ -11,6 +11,8 @@
 
 
 
+static QUdpSocket *udp;
+static QHostAddress acserver(QString("192.168.84.2"));
 static A429 enet1;
 static std::vector<ChannelInfo> channelInfo;
 
@@ -50,6 +52,8 @@ void processArgs(int argc, char *argv[])
 void sigAction(int sig, siginfo_t* siginfo, void* vptr)
 {
   fprintf(stderr, "arinc_ctrl::SigHandler: signal=%s cleaning up.\n", strsignal(sig));
+  std::string dump = enet1.RegisterDump();
+  udp->writeDatagram(dump.c_str(), dump.length(), acserver, enet1.StatusPort());
   enet1.Close();
   exit(0);
 }
@@ -74,8 +78,8 @@ void setupSignals()
   sigaction(SIGHUP, &act, (struct sigaction *)0);
   sigaction(SIGINT, &act, (struct sigaction *)0);
   sigaction(SIGTERM,&act, (struct sigaction *)0);
-
 }
+
 
 void initializeSequence()
 {
@@ -91,6 +95,7 @@ void initializeSequence()
     enet1.StartChannel(channelInfo[i].Channel(), channelInfo[i].Speed());
 }
 
+
 int main(int argc, char *argv[])
 {
   processArgs(argc, argv);
@@ -98,8 +103,7 @@ int main(int argc, char *argv[])
 
   initializeSequence();
 
-  QUdpSocket *udp = new QUdpSocket();
-  QHostAddress acserver(QString("192.168.84.2"));
+  udp = new QUdpSocket();
 
   int rc;
   while (1)

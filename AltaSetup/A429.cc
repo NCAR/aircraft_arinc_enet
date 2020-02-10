@@ -299,8 +299,31 @@ std::string A429::Status()
   status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_A429_PE_BITSTATUS, &bitStatus, 1);
   statusStr << bitStatus;
 
-
   return statusStr.str();
+}
+
+
+std::string A429::RegisterDump()
+{
+  ADT_L0_UINT32 status, value;
+  std::stringstream output;
+  output << "REG_DUMP";
+
+  for (int i = 0; i < 0x00E4; i += 4)
+  {
+    value = 0xffffffff;
+    status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, i, &value, 1);
+    output << ", " << std::hex << i << "=" << value;
+  }
+
+  for (int i = 0x0200; i < 0x05FC; i += 4)
+  {
+    value = 0xffffffff;
+    status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, i, &value, 1);
+    output << ", " << std::hex << i << "=" << value;
+  }
+
+  return output.str();
 }
 
 

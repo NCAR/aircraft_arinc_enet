@@ -22,6 +22,7 @@ public:
   void CalibrateIRIG();
   void StartChannel(int channel, int speed);
   std::string Status();
+  std::string RegisterDump();
   void CheckIRIG();
   void Close();
 
