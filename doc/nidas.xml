@@ -1,0 +1,74 @@
+
+
+The port number and IP address are baked into the device by us.  So each unit
+will have a unique IP and port so that we can run multiple on the same plane and
+play switcharoo.
+
+The timeout needs to be long enough to re-initialize the device...the IRIG
+calibrate is slow, so going with 10 seconds.
+
+      <sensor ID="ARINCENET" class="raf.UDPArincSensor" devicename="usock::56769" id="2100" timeout="10" suffix="_AENT1">
+        <parameter name="ip" type="string" value="192.168.84.12"/>
+      </sensor>
+
+
+Having Alta in the devicename says these will be the ARINC ENET device
+associated with sensor above.  The number after the colon is the channel
+number on the device; akin to ttyS5.  This scheme allows us to use the
+process() method in the DSMArincSensor class.  As the DSM comes up, these will
+register themselves with the ARINCENET class (above).
+
+      <arincSensor IDREF="IRS-GV" devicename="Alta:4" id="2200" suffix="_IE"/>
+      <arincSensor IDREF="ADC-GV" devicename="Alta:6" id="2600" suffix="_AE"/>
+      <arincSensor IDREF="GPS-GV" devicename="Alta:7" id="2800" suffix="_AE"/>
+
+
+The ARINC_HK packet is assembled by the arinc_ctrl program that dsm(1) forked.
+The port number MUST be that of ARINCENET plus one.  We had to use a separate
+port for because having this on the same port as above would generate traffic
+and the timeout would never kick in if the device failed.
+
+      <sensor ID="ARINCHK" class="UDPSocketSensor" devicename="usock::56770" id="2000" suffix="_AENT1">
+        <sample id="1" rate="1" scanfFormat="STATUS,%d,%d,%*d,%d,%*d,%*d,%d,%d,%d,%d,%d,%d">
+          <variable longname="ENET Periodic BIT read status: 0=success" name="PBRDSTAT" units="bits"/>
+          <variable longname="ENET Periodic Built-in Test: 0=good" name="PBIT" units="bits"/>
+          <variable longname="IRIG status: bit 0=SYNC,1=NOCODE,2=NOPPS,3=NOMAJT,4=NOYEAR,5=NOSYNC" name="IRIG_Status" units="bits"/>
+          <variable longname="ENET Number of Transactions" name="TCPTRANS" units="#"/>
+          <variable longname="ENET Number of Retries" name="TCPRTRY" units="#"/>
+          <variable longname="ENET Number of Failures" name="TCPFAILS" units="#"/>
+          <variable longname="ENET ROOT PE Control-Status Register" name="PECTRL" units="bits"/>
+          <variable longname="ENET ROOT PE Status Register" name="PESTS" units="bits"/>
+          <variable longname="ENET PE BIT Register" name="PEBIT" units="bits"/>
+        </sample>
+      </sensor>
+
+
+
+Values put into status packet; not all are decoded (arinc_ctrl:A429::Status() produces this):
+
+ - Status of reading the PE BIT register.  Tells us if we are talking to the device.
+ - Value of the PE Periodic BIT register
+ - Value of GLOBAL CSR register
+ - IRIG Detect - masked from GLOBAL CSR
+ - IRIG Latch - masked from GLOBAL CSR
+ - IRIG Lock - masked from GLOBAL CSR
+ - Number TCP transactions - from GetStatistics()
+ - Number TCP retries - from GetStatistics()
+ - Number TCP failures - from GetStatistics()
+ - Value of PE ROOT CSR register
+ - Value of PE ROOT Status register
+ - Value of PE GLOBAL PE BIT register
+
+
+Glossery:
+ BIT = Built-in Test
+ CSR = Control-Status Register
+ PE = Protocol Engine
+
+
+Alta's product started out as a PCI(?) card, and you can have multiple cards on
+a computer.  Some of the documentation doesn't make sense for the ENET device
+since there is only one card and one device.
+
+Global Registers are Card Level.
+Root Registers are Device Level (bank of channels).
