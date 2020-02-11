@@ -25,8 +25,8 @@ register themselves with the ARINCENET class (above).
 
 The ARINC_HK packet is assembled by the arinc_ctrl program that dsm(1) forked.
 The port number MUST be that of ARINCENET plus one.  We had to use a separate
-port for because having this on the same port as above would generate traffic
-and the timeout would never kick in if the device failed.
+port because having this on the same port as above would generate traffic and
+the timeout would never kick in if the device failed.
 
       <sensor ID="ARINCHK" class="UDPSocketSensor" devicename="usock::56770" id="2000" suffix="_AENT1">
         <sample id="1" rate="1" scanfFormat="STATUS,%d,%d,%*d,%d,%*d,%*d,%d,%d,%d,%d,%d,%d">
