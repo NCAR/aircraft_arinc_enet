@@ -27,6 +27,7 @@ public:
   void Close();
 
   bool	isOpen()	{ return _isOpen; }
+  bool	isSetup()	{ return _isSetup; }
   int	Port()		{ return _port; }
   int	StatusPort()	{ return _port+1; }
   int	failCounter()	{ return _failCounter; }
@@ -43,6 +44,7 @@ protected:
   void DisplayBitFailure(ADT_L0_UINT32);
 
   bool _isOpen;
+  bool _isSetup;
   bool _irigFail;
 
   // Ongoing status / detect stuff.

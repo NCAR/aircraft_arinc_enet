@@ -33,7 +33,7 @@
 #define ipOctets_to_ADT_L0_UINT32(class1, class2, subnet, hostNum) (ADT_L0_UINT32)((class1 << 24) | (class2 << 16) | (subnet << 8) | hostNum)
 
 
-A429::A429() : _irigFail(0), _failCounter(0), _port(56769)
+A429::A429() : _isOpen(false), _isSetup(false), _irigFail(0), _failCounter(0), _port(56769)
 {
   setEnetIP("192.168.84.12");
   setACserverIP("192.168.84.2");
@@ -102,6 +102,7 @@ printf("Setup done; isOpen=%d irigFail=%d\n", _isOpen, _irigFail);
   status = ADT_L1_Global_ReadIrigTime(DEVID_GLOBAL, &timeHigh, &timeLow);
   printf("%d 0x%08x 0x%08x\n", status, timeHigh, timeLow);
 
+  _isSetup = true;
 }
 
 
@@ -370,6 +371,8 @@ printf("Close()\n");
     fprintf(stderr, "ADT_L1_CloseDevice failed, status=%d\n", status);
 
   _isOpen = false;
+  _isSetup = false;
+fprintf(stderr, "Close finished\n");
 }
 
 void A429::DisplayInitFailure(ADT_L0_UINT32 status)
