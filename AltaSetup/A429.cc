@@ -308,7 +308,12 @@ std::string A429::RegisterDump()
 {
   ADT_L0_UINT32 status, value;
   std::stringstream output;
+
   output << "REG_DUMP";
+  if (_failCounter > 0) {
+    output << ", failed to connect\n";
+    return output.str();
+  }
 
   for (int i = 0; i < 0x0040; i += 4)
   {
@@ -327,7 +332,7 @@ std::string A429::RegisterDump()
   for (int i = 0x0200; i < 0x05FC; i += 4)
   {
     value = 0xffffffff;
-    status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, i, &value, 1);
+    status = ADT_L1_ReadDeviceMem32(DEVID, i, &value, 1);
     output << ", " << std::hex << i << "=" << value;
   }
 
@@ -342,7 +347,7 @@ std::string A429::RegisterDump()
 void A429::Close()
 {
 printf("Close()\n");
-  if (_isOpen == false)
+  if (_isOpen == false || _failCounter > 0)
     return;
 
   ADT_L0_UINT32 status, portnum, transactions, retries, failures;

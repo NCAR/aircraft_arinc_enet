@@ -53,7 +53,7 @@ void sigAction(int sig, siginfo_t* siginfo, void* vptr)
 {
   fprintf(stderr, "arinc_ctrl::SigHandler: signal=%s cleaning up.\n", strsignal(sig));
   std::string dump = enet1.RegisterDump();
-  fprintf(stderr, "sigAct: %s\n", dump.c_str());
+  fprintf(stderr, "arinc_ctrl::sigAct: %s\n", dump.c_str());
   udp->writeDatagram(dump.c_str(), dump.length(), acserver, enet1.StatusPort());
   enet1.Close();
   exit(0);
