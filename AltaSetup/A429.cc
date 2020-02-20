@@ -248,7 +248,7 @@ std::string A429::Status()
 
   bitStatus = 0;
   status = ADT_L1_BIT_PeriodicBIT(DEVID, &bitStatus);
-  statusStr << status << "," << bitStatus << ",";
+  statusStr << status << "," << std::hex << bitStatus << ",";
   if (status != ADT_SUCCESS) {
     fprintf(stderr, "PBIT FAILED!\n");
     DisplayBitFailure(bitStatus);
@@ -263,7 +263,7 @@ std::string A429::Status()
 
   // Check IRIG status.
   status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
-  statusStr << globalCSR << ",";
+  statusStr << std::hex << globalCSR << "," << std::dec;
   if (status == ADT_SUCCESS) {
     statusStr	<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT) << ","
 		<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH) << ","
@@ -282,7 +282,7 @@ std::string A429::Status()
     printf("UDP Port %d:  %d transactions, %d retries, %d failures\n", portnum, transactions, retries, failures);
   }
 
-  statusStr << "," << transactions << "," << retries << "," << failures << ",";
+  statusStr << std::dec << "," << transactions << "," << retries << "," << failures << ",";
 
 
   //
@@ -291,14 +291,14 @@ std::string A429::Status()
   //
   // PE BIT Status (ADT_L1_A429_PE_BITSTATUS, 0x002C): BIT tests
   bitStatus = 0xffffffff;
-  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_A429_PE_ROOT_CSR, &bitStatus, 1);
-  statusStr << bitStatus << ",";
+  status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_ROOT_CSR, &bitStatus, 1);
+  statusStr << std::hex << bitStatus << ",";
   bitStatus = 0xffffffff;
-  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_A429_PE_ROOT_STS, &bitStatus, 1);
-  statusStr << bitStatus << ",";
+  status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_ROOT_STS, &bitStatus, 1);
+  statusStr << std::hex << bitStatus << ",";
   bitStatus = 0xffffffff;
-  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_A429_PE_BITSTATUS, &bitStatus, 1);
-  statusStr << bitStatus;
+  status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_BITSTATUS, &bitStatus, 1);
+  statusStr << std::hex << bitStatus;
 
   return statusStr.str();
 }
@@ -310,7 +310,14 @@ std::string A429::RegisterDump()
   std::stringstream output;
   output << "REG_DUMP";
 
-  for (int i = 0; i < 0x00E4; i += 4)
+  for (int i = 0; i < 0x0040; i += 4)
+  {
+    value = 0xffffffff;
+    status = ADT_L1_ReadDeviceMem32(DEVID, i, &value, 1);
+    output << ", " << std::hex << i << "=" << value;
+  }
+
+  for (int i = 0x0040; i < 0x00E4; i += 4)
   {
     value = 0xffffffff;
     status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, i, &value, 1);

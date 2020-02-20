@@ -121,6 +121,6 @@ int main(int argc, char *argv[])
       initializeSequence();
 
     enet1.CheckIRIG();
-    sleep(1);
+    usleep(989000);
   }
 }
