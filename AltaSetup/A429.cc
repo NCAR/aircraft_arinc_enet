@@ -266,7 +266,6 @@ std::string A429::Status()
   statusStr << std::hex << globalCSR << "," << std::dec;
   if (status == ADT_SUCCESS) {
     statusStr	<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT) << ","
-		<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH) << ","
 		<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK);
     _irigDetect = (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
   }
@@ -285,11 +284,12 @@ std::string A429::Status()
   statusStr << std::dec << "," << transactions << "," << retries << "," << failures << ",";
 
 
-  //
-  // PE Control Register (ADT_L1_A429_PE_ROOT_CSR, 0x0000): General ARINC configs (APMP, reset, trig, extclk, interrupts)
-  // PE Status Register (ADT_L1_A429_PE_ROOT_STS, 0x0004): ARINC status (IRIG det, IRIG lock, interrupt pending)
-  //
-  // PE BIT Status (ADT_L1_A429_PE_BITSTATUS, 0x002C): BIT tests
+  /*
+   * PE Control Register (ADT_L1_A429_PE_ROOT_CSR, 0x0000): General ARINC configs (APMP, reset, trig, extclk, interrupts)
+   * PE Status Register (ADT_L1_A429_PE_ROOT_STS, 0x0004): ARINC status (IRIG det, IRIG lock, interrupt pending)
+   *
+   * PE BIT Status (ADT_L1_A429_PE_BITSTATUS, 0x002C): BIT tests
+   */
   bitStatus = 0xffffffff;
   status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_ROOT_CSR, &bitStatus, 1);
   statusStr << std::hex << bitStatus << ",";
