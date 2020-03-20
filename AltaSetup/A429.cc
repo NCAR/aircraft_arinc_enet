@@ -270,9 +270,11 @@ std::string A429::Status()
     _irigDetect = (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
   }
   else
-    statusStr << "-1,-1,-1";
+    statusStr << "-1,-1";
 
-  printf("IRIG: Detect=%d, Latch=%d, Lock=%d\n", (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LATCH), (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
+  printf("IRIG: Detect=%d, Lock=%d\n",
+	(globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT),
+	(globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
 
 
   // These stats will be for the TCP conenction between this program and the device.
@@ -386,6 +388,7 @@ printf("Close()\n");
   _isSetup = false;
 fprintf(stderr, "Close finished\n");
 }
+
 
 void A429::DisplayInitFailure(ADT_L0_UINT32 status)
 {
