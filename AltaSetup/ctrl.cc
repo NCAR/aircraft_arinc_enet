@@ -8,6 +8,7 @@
 
 #include "A429.h"
 #include "ChannelInfo.h"
+#include "MultiCast.h"
 
 
 
@@ -103,19 +104,35 @@ void initializeSequence()
 
 int main(int argc, char *argv[])
 {
+  MultiCastStatus mcStat;
+
   processArgs(argc, argv);
   setupSignals();
 
   initializeSequence();
 
   udp = new QUdpSocket();
+/*
+  try {
+    mcStat = new MultiCastStatus();
+  }
+  catch(const nidas::util::IOException& e) {
+    mcStat = 0;
+  }
+*/
+//  if (mcStat)
+    mcStat.sendStatus("----- started -----");
 
-  int rc;
+
+  int rc, cntr = 0;
   while (1)
   {
     std::string status = enet1.Status();
     if ((rc = udp->writeDatagram(status.c_str(), status.length(), acserver, enet1.StatusPort())) < 1)
       fprintf(stderr, "udp->writeDatagram of status packet failed, nBytes=%d\n", rc);
+
+    if (cntr++ % 3 == 0)	// every 3 seconds multicast status to status_listener
+      mcStat.sendStatus(enet1.StatusPageStatus());
 
     if (enet1.failCounter() > 5)
       initializeSequence();

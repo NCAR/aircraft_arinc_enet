@@ -10,11 +10,13 @@ CONFIG += console
 
 INCLUDEPATH += .
 INCLUDEPATH += /opt/local/include/Alta
+INCLUDEPATH += /opt/nidas/include
 LIBS += -L/opt/local/lib -lADT_L1_Linux_x86_64_v3310 -lADT_L0_Linux_x86_64_v3310
+LIBS += -L/opt/nidas/lib64 -lnidas_util
 
 # Input
-HEADERS += A429.h
-SOURCES += ctrl.cc A429.cc
+HEADERS += A429.h MultiCast.h
+SOURCES += ctrl.cc A429.cc MultiCast.cc
 
 target.files = arinc_ctrl
 target.path = /opt/nidas/bin
