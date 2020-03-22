@@ -93,9 +93,9 @@ void initializeSequence()
     enet1.Open();
   }
 
-  enet1.Status();
+  enet1.StatusPacket();
   enet1.CalibrateIRIG();
-  enet1.Status();
+  enet1.StatusPacket();
 
   for (size_t i = 0; i < channelInfo.size(); ++i)
     enet1.StartChannel(channelInfo[i].Channel(), channelInfo[i].Speed());
@@ -127,12 +127,12 @@ int main(int argc, char *argv[])
   int rc, cntr = 0;
   while (1)
   {
-    std::string status = enet1.Status();
+    std::string status = enet1.StatusPacket();
     if ((rc = udp->writeDatagram(status.c_str(), status.length(), acserver, enet1.StatusPort())) < 1)
       fprintf(stderr, "udp->writeDatagram of status packet failed, nBytes=%d\n", rc);
 
     if (cntr++ % 3 == 0)	// every 3 seconds multicast status to status_listener
-      mcStat.sendStatus(enet1.StatusPageStatus());
+      mcStat.sendStatus(enet1.StatusPagePacket().c_str());
 
     if (enet1.failCounter() > 5)
       initializeSequence();

@@ -115,8 +115,8 @@ void A429::Setup()
 
   /* Set IP addresses and Init Devices - Must be done in this sequential order! */
   status = ADT_L1_ENET_SetIpAddr(DEVID,
-	ipOctets_to_ADT_L0_UINT32(enetIP[0], enetIP[1], enetIP[2], enetIP[3]),
-	ipOctets_to_ADT_L0_UINT32(acserverIP[0], acserverIP[1], acserverIP[2], acserverIP[3]));
+	ipOctets_to_ADT_L0_UINT32(_enetIP[0], _enetIP[1], _enetIP[2], _enetIP[3]),
+	ipOctets_to_ADT_L0_UINT32(_acserverIP[0], _acserverIP[1], _acserverIP[2], _acserverIP[3]));
   if (status != ADT_SUCCESS)
     fprintf(stderr, "ADT_L1_ENET_SetIpAddr failed, status = %d\n", status);
 
@@ -239,51 +239,65 @@ printf("StartChannel %d %d\n", channel, speed);
 }
 
 
-std::string A429::Status()
+std::string A429::StatusPacket()
 {
-  ADT_L0_UINT32 status, bitStatus = 0xffffffff, globalCSR = 0xffffffff;
-  ADT_L0_UINT32 portnum, transactions = 0xffffffff, retries = 0xffffffff, failures = 0xffffffff;
+  ADT_L0_UINT32 status, portnum, hi = 0, lo = 0;
   std::stringstream statusStr;
+
+  _globalCSR = _transactions = _retries = _failures = 0xffffffff;
   statusStr << "STATUS,";
 
-  bitStatus = 0;
-  status = ADT_L1_BIT_PeriodicBIT(DEVID, &bitStatus);
-  statusStr << status << "," << std::hex << bitStatus << ",";
+  status = ADT_L1_Global_ReadIrigTime(DEVID_GLOBAL, &hi, &lo);
+  sprintf(_timeStamp, "%02d:%02d:%02d",
+	(lo & 0x00FF0000) >> 16, (lo & 0x0000FF00) >> 8, lo & 0x000000FF);
+  statusStr << _timeStamp << ",";
   if (status != ADT_SUCCESS) {
     fprintf(stderr, "PBIT FAILED!\n");
-    DisplayBitFailure(bitStatus);
+    DisplayBitFailure(_bitStatus);
+  }
+  else
+  {
+    statusStr << "00:00:00,";
+  }
+
+
+  _bitStatus = 0;
+  status = ADT_L1_BIT_PeriodicBIT(DEVID, &_bitStatus);
+  statusStr << status << "," << std::hex << _bitStatus << ",";
+  if (status != ADT_SUCCESS) {
+    fprintf(stderr, "PBIT FAILED!\n");
+    DisplayBitFailure(_bitStatus);
     _failCounter++;
   }
   else
   {
     _failCounter = 0;
-    if (bitStatus) printf("\nBIT Status = %08X\n", bitStatus);
+    if (_bitStatus) printf("\nBIT Status = %08X\n", _bitStatus);
   }
 
 
   // Check IRIG status.
-  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &globalCSR, 1);
-  statusStr << std::hex << globalCSR << "," << std::dec;
+  status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, ADT_L1_GLOBAL_CSR, &_globalCSR, 1);
+  statusStr << std::hex << _globalCSR << "," << std::dec;
   if (status == ADT_SUCCESS) {
-    statusStr	<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT) << ","
-		<< (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK);
-    _irigDetect = (globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
+    _irigDetect = (_globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT);
+    _irigLock   = (_globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK);
+    statusStr  << _irigDetect << "," << _irigLock;
   }
   else
     statusStr << "-1,-1";
 
-  printf("IRIG: Detect=%d, Lock=%d\n",
-	(globalCSR & ADT_L1_GLOBAL_CSR_IRIG_DETECT),
-	(globalCSR & ADT_L1_GLOBAL_CSR_IRIG_LOCK));
+  printf("IRIG: Detect=%d, Lock=%d\n", _irigDetect, _irigLock);
 
 
   // These stats will be for the TCP conenction between this program and the device.
-  status = ADT_L1_ENET_ADCP_GetStatistics(DEVID, &portnum, &transactions, &retries, &failures);
+  status = ADT_L1_ENET_ADCP_GetStatistics(DEVID, &portnum, &_transactions, &_retries, &_failures);
   if (status == ADT_SUCCESS) {
-    printf("UDP Port %d:  %d transactions, %d retries, %d failures\n", portnum, transactions, retries, failures);
+    printf("UDP Port %d:  %d transactions, %d retries, %d failures\n",
+		portnum, _transactions, _retries, _failures);
   }
 
-  statusStr << std::dec << "," << transactions << "," << retries << "," << failures << ",";
+  statusStr << std::dec << "," << _transactions << "," << _retries << "," << _failures << ",";
 
 
   /*
@@ -292,53 +306,101 @@ std::string A429::Status()
    *
    * PE BIT Status (ADT_L1_A429_PE_BITSTATUS, 0x002C): BIT tests
    */
-  bitStatus = 0xffffffff;
-  status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_ROOT_CSR, &bitStatus, 1);
-  statusStr << std::hex << bitStatus << ",";
-  bitStatus = 0xffffffff;
-  status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_ROOT_STS, &bitStatus, 1);
-  statusStr << std::hex << bitStatus << ",";
-  bitStatus = 0xffffffff;
-  status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_BITSTATUS, &bitStatus, 1);
-  statusStr << std::hex << bitStatus;
+  _PErootCSR = _PErootSTS = _PEbitSTS = 0xffffffff;
+  status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_ROOT_CSR, &_PErootCSR, 1);
+  statusStr << std::hex << _PErootCSR << ",";
+  status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_ROOT_STS, &_PErootSTS, 1);
+  statusStr << std::hex << _PErootSTS << ",";
+  status = ADT_L1_ReadDeviceMem32(DEVID, ADT_L1_A429_PE_BITSTATUS, &_PEbitSTS, 1);
+  statusStr << std::hex << _PEbitSTS;
 
   return statusStr.str();
+}
+
+
+std::string A429::StatusPagePacket()
+{
+  std::stringstream ostr;
+
+  if (_failCounter > 0)
+  {
+    ostr << "<td align=left><font color=red><b>not active</b></font></td></tr>\n";
+  }
+  else
+  {
+    ostr << "<?xml version=\"1.0\"?><group><name>ARINC</name><clock>" << _timeStamp << "</clock<status>i<![CDATA[<table id=status><caption>ARINC ENET (acserver) /</caption>";
+
+    ostr << "<td align=left>IRIG: ";
+    if (!_irigDetect)
+      ostr << "<font color=red><b>DET</b></font>, ";
+    else
+      ostr << "DET, ";
+
+    if (!_irigLock)
+      ostr << "<font color=red><b>LCK</b></font>, ";
+    else
+      ostr << "LCK, ";
+
+    ostr << "BIT: ";
+    if (_bitStatus)
+    {
+      if (_bitStatus & 0x00000002)
+        ostr << "<font color=red><b>MEM</b></font> ";
+
+      if (_bitStatus & 0x00000004)
+        ostr << "<font color=red><b>PROC</b></font> ";
+
+      if (_bitStatus & 0x00000008)
+        ostr << "<font color=red><b>TimeTag</b></font> ";
+
+      if (_bitStatus & 0x01000000)
+        ostr << "<font color=red><b>POST</b></font> ";
+
+      if (_bitStatus & 0x02000000)
+        ostr << "<font color=red><b>PBIT</b></font>";
+    }
+
+
+    ostr << "</td></tr></tbody></table>]]></status></group>";
+  }
+
+  return ostr.str();
 }
 
 
 std::string A429::RegisterDump()
 {
   ADT_L0_UINT32 status, value;
-  std::stringstream output;
+  std::stringstream ostr;
 
-  output << "REG_DUMP";
+  ostr << "REG_DUMP";
   if (_failCounter > 0) {
-    output << ", failed to connect\n";
-    return output.str();
+    ostr << ", failed to connect\n";
+    return ostr.str();
   }
 
   for (int i = 0; i < 0x0040; i += 4)
   {
     value = 0xffffffff;
     status = ADT_L1_ReadDeviceMem32(DEVID, i, &value, 1);
-    output << ", " << std::hex << i << "=" << value;
+    ostr << ", " << std::hex << i << "=" << value;
   }
 
   for (int i = 0x0040; i < 0x00E4; i += 4)
   {
     value = 0xffffffff;
     status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, i, &value, 1);
-    output << ", " << std::hex << i << "=" << value;
+    ostr << ", " << std::hex << i << "=" << value;
   }
 
   for (int i = 0x0200; i < 0x05FC; i += 4)
   {
     value = 0xffffffff;
     status = ADT_L1_ReadDeviceMem32(DEVID, i, &value, 1);
-    output << ", " << std::hex << i << "=" << value;
+    ostr << ", " << std::hex << i << "=" << value;
   }
 
-  return output.str();
+  return ostr.str();
 }
 
 
@@ -428,13 +490,13 @@ void A429::DisplayBitFailure(ADT_L0_UINT32 bitStatus)
 
 void A429::setEnetIP(const char ip[])
 {
-  sscanf(ip, "%d.%d.%d.%d", &enetIP[0], &enetIP[1], &enetIP[2], &enetIP[3]);
-  printf("ARINC device IP set to %d.%d.%d.%d\n", enetIP[0], enetIP[1], enetIP[2], enetIP[3]);
+  sscanf(ip, "%d.%d.%d.%d", &_enetIP[0], &_enetIP[1], &_enetIP[2], &_enetIP[3]);
+  printf("ARINC device IP set to %d.%d.%d.%d\n", _enetIP[0], _enetIP[1], _enetIP[2], _enetIP[3]);
 }
 
 void A429::setACserverIP(const char ip[])
 {
-  sscanf(ip, "%d.%d.%d.%d", &acserverIP[0], &acserverIP[1], &acserverIP[2], &acserverIP[3]);
-  printf("acserver IP set to %d.%d.%d.%d\n", acserverIP[0], acserverIP[1], acserverIP[2], acserverIP[3]);
+  sscanf(ip, "%d.%d.%d.%d", &_acserverIP[0], &_acserverIP[1], &_acserverIP[2], &_acserverIP[3]);
+  printf("acserver IP set to %d.%d.%d.%d\n", _acserverIP[0], _acserverIP[1], _acserverIP[2], _acserverIP[3]);
 }
 

@@ -21,7 +21,24 @@ public:
   void Setup();
   void CalibrateIRIG();
   void StartChannel(int channel, int speed);
-  std::string Status();
+
+  /**
+   * Query ENET device status registers and assemble the status/hkp packet to
+   * send.
+   */
+  std::string StatusPacket();
+
+  /**
+   * Create HTML packet to Multicast to status_listner.  Akin to the
+   * printStatus() in the nidas DSMSensor class.
+   * to send.
+   */
+  std::string StatusPagePacket();
+
+  /**
+   * Method to query ENET device for full memory dump, called when there is a
+   * device failure.  May or may not be useful.
+   */
   std::string RegisterDump();
   void CheckIRIG();
   void Close();
@@ -48,12 +65,16 @@ protected:
   bool _irigFail;
 
   // Ongoing status / detect stuff.
-  bool _irigDetect;
+  bool _irigDetect, _irigLock;
+  /// IRIG time as read from ENET device. "HH:MM:SS".
+  char _timeStamp[32];
+  ADT_L0_UINT32 _bitStatus, _globalCSR, _PErootCSR, _PErootSTS, _PEbitSTS;
+  ADT_L0_UINT32 _transactions, _retries, _failures;
 
   int  _failCounter;
 
-  ADT_L0_UINT32	enetIP[4];
-  ADT_L0_UINT32	acserverIP[4];
+  ADT_L0_UINT32	_enetIP[4];
+  ADT_L0_UINT32	_acserverIP[4];
   unsigned int _port;
 
   std::vector<int> _channelList;
