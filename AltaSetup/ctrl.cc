@@ -98,6 +98,9 @@ void initializeSequence()
 
   for (size_t i = 0; i < channelInfo.size(); ++i)
     enet1.StartChannel(channelInfo[i].Channel(), channelInfo[i].Speed());
+
+  std::string dump = enet1.RegisterDump();
+  udp->writeDatagram(dump.c_str(), dump.length(), acserver, enet1.StatusPort());
 }
 
 
@@ -106,9 +109,9 @@ int main(int argc, char *argv[])
   processArgs(argc, argv);
   setupSignals();
 
-  initializeSequence();
-
   udp = new QUdpSocket();
+
+  initializeSequence();
 
   int rc;
   while (1)
