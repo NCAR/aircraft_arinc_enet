@@ -317,21 +317,21 @@ std::string A429::RegisterDump()
     return output.str();
   }
 
-  for (int i = 0; i < 0x0040; i += 4)
+  for (int i = 0; i <= 0x00FC; i += 4)
   {
     value = 0xffffffff;
     status = ADT_L1_ReadDeviceMem32(DEVID, i, &value, 1);
     output << ", " << std::hex << i << "=" << value;
   }
 
-  for (int i = 0x0040; i < 0x00E4; i += 4)
+  for (int i = 0x0040; i <= 0x00FC; i += 4)
   {
     value = 0xffffffff;
     status = ADT_L1_ReadDeviceMem32(DEVID_GLOBAL, i, &value, 1);
     output << ", " << std::hex << i << "=" << value;
   }
 
-  for (int i = 0x0200; i < 0x05FC; i += 4)
+  for (int i = 0x0200; i <= 0x05FC; i += 4)
   {
     value = 0xffffffff;
     status = ADT_L1_ReadDeviceMem32(DEVID, i, &value, 1);
