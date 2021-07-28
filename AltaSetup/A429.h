@@ -29,12 +29,13 @@ public:
   bool	isOpen()	{ return _isOpen; }
   bool	isSetup()	{ return _isSetup; }
   int	Port()		{ return _port; }
-  int	StatusPort()	{ return _port+1; }
+  int	StatusPort()	{ return _statusPort; }
   int	failCounter()	{ return _failCounter; }
 
   void setEnetIP(const char ip[]);
   void setACserverIP(const char ip[]);
   void setPort(const char port[])	{ _port = atoi(port); }
+  void setStatusPort(const char port[])	{ _statusPort = atoi(port); }
 
 
 protected:
@@ -55,6 +56,7 @@ protected:
   ADT_L0_UINT32	enetIP[4];
   ADT_L0_UINT32	acserverIP[4];
   unsigned int _port;
+  unsigned int _statusPort;
 
   std::vector<int> _channelList;
 };

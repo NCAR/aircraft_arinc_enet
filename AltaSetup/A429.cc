@@ -33,7 +33,7 @@
 #define ipOctets_to_ADT_L0_UINT32(class1, class2, subnet, hostNum) (ADT_L0_UINT32)((class1 << 24) | (class2 << 16) | (subnet << 8) | hostNum)
 
 
-A429::A429() : _isOpen(false), _isSetup(false), _irigFail(0), _failCounter(0), _port(56769)
+A429::A429() : _isOpen(false), _isSetup(false), _irigFail(0), _failCounter(0), _port(56769), _statusPort(0)
 {
   setEnetIP("192.168.84.12");
   setACserverIP("192.168.84.2");

@@ -21,7 +21,7 @@ void processArgs(int argc, char *argv[])
 {
   int opt;
 
-  while((opt = getopt(argc, argv, ":i:s:c:p:")) != -1)
+  while((opt = getopt(argc, argv, ":i:s:c:p:u:")) != -1)
   {
     ChannelInfo ci;
     switch(opt)
@@ -32,11 +32,14 @@ void processArgs(int argc, char *argv[])
       case 's':
         if (ci.SetChannel(optarg)) channelInfo.push_back(ci);
         break;
-      case 'i':
+      case 'i':		// The IP address to program the Alta device as
         enet1.setEnetIP(optarg);
         break;
-      case 'p':
+      case 'p':		// The port the Alta device will transmit to nidas on
         enet1.setPort(optarg);
+        break;
+      case 'u':		// ALTASTATUS port.  port to transmit status packet to nidas on
+        enet1.setStatusPort(optarg);
         break;
       case ':':
         fprintf(stderr, "option needs a value\n");
@@ -54,7 +57,8 @@ void sigAction(int sig, siginfo_t* siginfo, void* vptr)
   fprintf(stderr, "arinc_ctrl::SigHandler: signal=%s cleaning up.\n", strsignal(sig));
   std::string dump = enet1.RegisterDump();
   fprintf(stderr, "arinc_ctrl::sigAct: %s\n", dump.c_str());
-  udp->writeDatagram(dump.c_str(), dump.length(), acserver, enet1.StatusPort());
+  if (enet1.StatusPort() > 0)
+    udp->writeDatagram(dump.c_str(), dump.length(), acserver, enet1.StatusPort());
   enet1.Close();
   exit(0);
 }
@@ -100,7 +104,8 @@ void initializeSequence()
     enet1.StartChannel(channelInfo[i].Channel(), channelInfo[i].Speed());
 
   std::string dump = enet1.RegisterDump();
-  udp->writeDatagram(dump.c_str(), dump.length(), acserver, enet1.StatusPort());
+  if (enet1.StatusPort() > 0)
+    udp->writeDatagram(dump.c_str(), dump.length(), acserver, enet1.StatusPort());
 }
 
 
@@ -116,9 +121,12 @@ int main(int argc, char *argv[])
   int rc;
   while (1)
   {
-    std::string status = enet1.Status();
-    if ((rc = udp->writeDatagram(status.c_str(), status.length(), acserver, enet1.StatusPort())) < 1)
-      fprintf(stderr, "udp->writeDatagram of status packet failed, nBytes=%d\n", rc);
+    if (enet1.StatusPort() > 0)
+    {
+      std::string status = enet1.Status();
+      if ((rc = udp->writeDatagram(status.c_str(), status.length(), acserver, enet1.StatusPort())) < 1)
+        fprintf(stderr, "udp->writeDatagram of status packet failed, nBytes=%d\n", rc);
+    }
 
     if (enet1.failCounter() > 5)
       initializeSequence();
