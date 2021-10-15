@@ -10,7 +10,7 @@ CONFIG += console
 
 INCLUDEPATH += .
 INCLUDEPATH += /opt/local/include/Alta
-LIBS += -L/opt/local/lib -lADT_L1_Linux_x86_64_v3310 -lADT_L0_Linux_x86_64_v3310
+LIBS += -L/opt/local/lib -lADT_L1_Linux_x86_64_v4000 -lADT_L0_Linux_x86_64_v4000
 
 # Input
 HEADERS += A429.h

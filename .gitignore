@@ -1,5 +1,7 @@
 Makefile
 
+.qmake.stash
+
 # Prerequisites
 *.d
 
