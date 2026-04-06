@@ -52,7 +52,7 @@ void processArgs(int argc, char *argv[])
 }
 
 
-void sigAction(int sig, siginfo_t* siginfo, void* vptr)
+void sigAction(int sig, [[maybe_unused]] siginfo_t* siginfo, [[maybe_unused]] void* vptr)
 {
   fprintf(stderr, "arinc_ctrl::SigHandler: signal=%s cleaning up.\n", strsignal(sig));
   std::string dump = enet1.RegisterDump();

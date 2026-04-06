@@ -308,7 +308,7 @@ std::string A429::Status()
 
 std::string A429::RegisterDump()
 {
-  ADT_L0_UINT32 status, value;
+  [[maybe_unused]] ADT_L0_UINT32 status, value;
   std::stringstream output;
 
   output << "REG_DUMP";

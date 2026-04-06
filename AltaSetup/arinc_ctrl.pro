@@ -10,6 +10,7 @@ CONFIG += console
 
 INCLUDEPATH += .
 INCLUDEPATH += /opt/local/include/Alta
+QMAKE_CXXFLAGS += -std=c++20 -Werror -Wall
 LIBS += -L/opt/local/lib -lADT_L1_Linux_x86_64_v4000 -lADT_L0_Linux_x86_64_v4000
 
 # Input
